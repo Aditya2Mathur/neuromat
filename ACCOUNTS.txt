@@ -1,0 +1,10 @@
+NEUROMAT CLINIC — DEMO ACCOUNTS
+================================
+
+Role          | Email Address            | Password
+--------------|--------------------------|--------------
+Admin         | admin@neuromat.com       | admin123
+Reception     | reception@neuromat.com   | reception123
+Doctor        | shakir@neuromat.com      | doctor123
+Doctor        | afifa@neuromat.com       | doctor123
+Medical Store | store@neuromat.com       | store123

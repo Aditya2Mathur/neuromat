@@ -584,3 +584,18 @@ select.input {
   .card-header    { padding: 14px 16px; }
   .card-body      { padding: 16px; }
 }
+
+/* ─── Login Page ──────────────────────────────────────────────── */
+/* Left panel: hidden on small, flex on ≥1024px */
+.login-left-panel        { display: none !important; }
+@media (min-width: 1024px) {
+  .login-left-panel      { display: flex !important; }
+  .login-mobile-brand    { display: none !important; }
+}
+
+/* Spinner keyframe for login button */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
