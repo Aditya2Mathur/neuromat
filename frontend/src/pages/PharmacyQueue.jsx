@@ -266,35 +266,27 @@ export default function PharmacyQueue() {
       <div className="print-only-spacer" />
       
       <div className="print-only-patient-header">
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 20 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
           <tbody>
             <tr>
-              <td style={{ padding: '6px 0', fontSize: '14px', color: '#000' }}>
-                <strong>Patient Name:</strong> {pat.name}
+              <td style={{ padding: '4px 0', fontSize: '13px', color: '#000' }}>
+                <strong>Patient:</strong> {pat.name} ({pat.age ? `${pat.age} yrs` : '—'} / {pat.gender || '—'})
               </td>
-              <td style={{ padding: '6px 0', fontSize: '14px', color: '#000', textAlign: 'right' }}>
-                <strong>Doctor:</strong> {doc.name}
-              </td>
-            </tr>
-            <tr>
-              <td style={{ padding: '6px 0', fontSize: '13px', color: '#000' }}>
-                <strong>Age/Gender:</strong> {pat.age ? `${pat.age} yrs` : '—'} / {pat.gender || '—'}
-              </td>
-              <td style={{ padding: '6px 0', fontSize: '13px', color: '#000', textAlign: 'right' }}>
-                <strong>Specialty:</strong> {doc.specialty || '—'}
+              <td style={{ padding: '4px 0', fontSize: '13px', color: '#000', textAlign: 'right' }}>
+                <strong>Date:</strong> {format(new Date(activeEntry.created_at || Date.now()), 'dd MMM yyyy')}
               </td>
             </tr>
             <tr>
-              <td style={{ padding: '6px 0', fontSize: '13px', color: '#000' }}>
+              <td style={{ padding: '4px 0', fontSize: '12px', color: '#000' }}>
                 <strong>Weight:</strong> {pat.weight ? `${pat.weight} kg` : '—'} | <strong>Phone:</strong> {pat.phone || '—'}
               </td>
-              <td style={{ padding: '6px 0', fontSize: '13px', color: '#000', textAlign: 'right' }}>
-                <strong>Date:</strong> {format(new Date(activeEntry.created_at || Date.now()), 'dd MMM yyyy')} | <strong>Token:</strong> #{activeEntry.token_number}
+              <td style={{ padding: '4px 0', fontSize: '12px', color: '#000', textAlign: 'right' }}>
+                <strong>Token:</strong> #{activeEntry.token_number}
               </td>
             </tr>
           </tbody>
         </table>
-        <div style={{ borderBottom: '2px solid #000', marginBottom: 20 }} />
+        <div style={{ borderBottom: '1.5px solid #000', marginBottom: 12 }} />
       </div>
 
       {/* ── Top bar ─────────────────────────────────── */}
@@ -480,13 +472,13 @@ export default function PharmacyQueue() {
               </div>
             </div>
 
-            <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="prescription-details-body" style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
               {/* Diagnosis */}
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>
+                <div className="print-compact-header" style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>
                   Diagnosis
                 </div>
-                <div style={{
+                <div className="print-compact-box" style={{
                   padding: '12px 16px', borderRadius: 10,
                   background: 'linear-gradient(135deg, rgba(99,102,241,0.06), rgba(139,92,246,0.04))',
                   border: '1px solid rgba(99,102,241,0.15)',
@@ -499,10 +491,10 @@ export default function PharmacyQueue() {
               {/* Notes */}
               {prescription?.notes && (
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>
+                  <div className="print-compact-header" style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>
                     Clinical Notes
                   </div>
-                  <div style={{
+                  <div className="print-compact-box" style={{
                     padding: '12px 16px', borderRadius: 10,
                     background: 'var(--bg-surface)', border: '1px solid var(--border)',
                     fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.6,

@@ -618,6 +618,7 @@ select.input {
   .prescription-right {
     display: block !important;
     width: 100% !important;
+    gap: 8px !important;
   }
 
   /* Clean up cards for printing on physical letterhead */
@@ -628,16 +629,50 @@ select.input {
     padding: 0 !important;
   }
 
+  /* Reduce padding and gap on details card body */
+  .prescription-details-body {
+    padding: 0 !important;
+    gap: 8px !important;
+  }
+
+  /* Reduce sizes & margins for diagnosis / notes boxes */
+  .print-compact-header {
+    margin-bottom: 3px !important;
+    font-size: 10px !important;
+    color: #555 !important;
+  }
+  
+  .print-compact-box {
+    padding: 6px 10px !important;
+    font-size: 12.5px !important;
+    border-radius: 6px !important;
+    background: transparent !important;
+    border: 1px solid #ddd !important;
+  }
+
   /* Compact table style adjustments for high-contrast print */
   .prescription-meds-table th {
     border-bottom: 2px solid #000 !important;
     color: #000 !important;
-    padding: 8px 4px !important;
+    padding: 6px 4px !important;
+    font-size: 11px !important;
   }
   .prescription-meds-table td {
     border-bottom: 1px solid #ddd !important;
     color: #000 !important;
-    padding: 8px 4px !important;
+    padding: 6px 4px !important;
+    font-size: 12px !important;
+  }
+
+  /* Reduce instructions tag size on print */
+  .prescription-meds-table td div {
+    font-size: 10px !important;
+    padding: 2px 6px !important;
+    margin-top: 3px !important;
+    border-radius: 4px !important;
+    border: 1px solid #ddd !important;
+    background: transparent !important;
+    display: inline-block !important;
   }
 
   * {
