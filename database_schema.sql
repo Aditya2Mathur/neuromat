@@ -161,3 +161,14 @@ INSERT INTO medicines (name, category, unit, stock_quantity, low_stock_threshold
   ('Vitamin B Complex', 'Vitamin', 'tablet', 300, 30, 8),
   ('Calcium + Vitamin D3', 'Supplement', 'tablet', 200, 20, 15)
 ON CONFLICT (name) DO NOTHING;
+
+-- Function to decrement medicine stock quantity atomically
+CREATE OR REPLACE FUNCTION decrement_stock(med_id uuid, qty integer)
+RETURNS void AS $$
+BEGIN
+  UPDATE medicines
+  SET stock_quantity = COALESCE(stock_quantity, 0) - qty,
+      updated_at = NOW()
+  WHERE id = med_id;
+END;
+$$ LANGUAGE plpgsql;

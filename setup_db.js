@@ -148,6 +148,17 @@ WHERE email = 'shakir@neuromat.com' AND doctor_id IS NULL;
 
 UPDATE staff SET doctor_id = (SELECT id FROM doctors WHERE name = 'Dr. Afifa' LIMIT 1)
 WHERE email = 'afifa@neuromat.com' AND doctor_id IS NULL;
+
+-- Function to decrement medicine stock quantity atomically
+CREATE OR REPLACE FUNCTION decrement_stock(med_id uuid, qty integer)
+RETURNS void AS $$
+BEGIN
+  UPDATE medicines
+  SET stock_quantity = COALESCE(stock_quantity, 0) - qty,
+      updated_at = NOW()
+  WHERE id = med_id;
+END;
+$$ LANGUAGE plpgsql;
 `
 
 const SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNuaXhqdW5tdnRvYmF6aWt2cXhzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTY3OTU0OCwiZXhwIjoyMDk3MjU1NTQ4fQ.hd-dVOFDdZzQJms_WPxL-N4alC5sC6X01DKL4XVJSWM'

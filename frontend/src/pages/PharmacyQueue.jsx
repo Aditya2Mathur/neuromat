@@ -79,17 +79,22 @@ export default function PharmacyQueue() {
         if (prescription?.prescription_items) {
           for (const item of prescription.prescription_items) {
             if (item.medicine_id) {
-              await supabase.rpc('decrement_stock', { med_id: item.medicine_id, qty: item.quantity || 1 })
-                .catch(async () => {
-                  const { data: med } = await supabase.from('medicines')
-                    .select('stock_quantity').eq('id', item.medicine_id).single()
-                  if (med) {
-                    await supabase.from('medicines').update({
-                      stock_quantity: Math.max(0, med.stock_quantity - (item.quantity || 1)),
-                      updated_at: new Date().toISOString(),
-                    }).eq('id', item.medicine_id)
-                  }
-                })
+              const { error: rpcError } = await supabase.rpc('decrement_stock', {
+                med_id: item.medicine_id,
+                qty: item.quantity || 1
+              })
+
+              if (rpcError) {
+                console.warn('decrement_stock RPC failed, falling back to manual update:', rpcError.message)
+                const { data: med } = await supabase.from('medicines')
+                  .select('stock_quantity').eq('id', item.medicine_id).single()
+                if (med) {
+                  await supabase.from('medicines').update({
+                    stock_quantity: Math.max(0, med.stock_quantity - (item.quantity || 1)),
+                    updated_at: new Date().toISOString(),
+                  }).eq('id', item.medicine_id)
+                }
+              }
             }
           }
         }
