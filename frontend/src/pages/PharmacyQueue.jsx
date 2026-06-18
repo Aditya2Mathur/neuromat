@@ -539,94 +539,58 @@ export default function PharmacyQueue() {
               </span>
             </div>
 
-            <div style={{ padding: '16px 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ padding: '16px 22px' }}>
               {rxItems.length === 0 ? (
                 <div className="empty-state" style={{ padding: '32px 0' }}>
                   <Pill size={36} className="empty-state-icon" />
                   <p className="empty-state-text">No medicines in this prescription</p>
                 </div>
-              ) : rxItems.map((item, idx) => (
-                <div
-                  key={item.id}
-                  style={{
-                    background: 'var(--bg-surface)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 14,
-                    overflow: 'hidden',
-                    transition: 'border-color 0.15s',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(5,150,105,0.35)'}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
-                >
-                  {/* Med header */}
-                  <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '12px 16px',
-                    background: 'rgba(5,150,105,0.04)',
-                    borderBottom: '1px solid var(--border)',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{
-                        width: 28, height: 28, borderRadius: 8,
-                        background: 'rgba(5,150,105,0.15)',
-                        color: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 12, fontWeight: 800,
-                      }}>
-                        {idx + 1}
-                      </div>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                        {item.medicine_name}
-                      </span>
-                    </div>
-                    {/* Quantity badge */}
-                    <div style={{
-                      display: 'flex', alignItems: 'center', gap: 6,
-                      background: 'rgba(5,150,105,0.1)',
-                      border: '1px solid rgba(5,150,105,0.25)',
-                      borderRadius: 20, padding: '4px 12px',
-                    }}>
-                      <Package size={13} color="var(--success)" weight="fill" />
-                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--success)' }}>
-                        Qty: {item.quantity || 1}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Med details grid */}
-                  <div style={{ padding: '14px 16px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-                    {[
-                      { label: 'Dosage',      value: item.dosage     || '—' },
-                      { label: 'Frequency',   value: item.frequency  || '—' },
-                      { label: 'Duration',    value: item.duration   || '—' },
-                    ].map(({ label, value }) => (
-                      <div key={label}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>
-                          {label}
-                        </div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                          {value}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Instructions */}
-                  {item.instructions && (
-                    <div style={{
-                      margin: '0 16px 14px',
-                      padding: '9px 12px',
-                      borderRadius: 8,
-                      background: 'rgba(245,158,11,0.06)',
-                      border: '1px solid rgba(245,158,11,0.18)',
-                      fontSize: 12.5, color: '#92400e',
-                      display: 'flex', alignItems: 'flex-start', gap: 7,
-                    }}>
-                      <NotePencil size={13} color="#d97706" style={{ flexShrink: 0, marginTop: 1 }} />
-                      {item.instructions}
-                    </div>
-                  )}
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="prescription-meds-table" style={{ width: '100%', borderCollapse: 'collapse', borderSpacing: 0 }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid var(--border)', textAlign: 'left' }}>
+                        <th style={{ padding: '12px 10px', fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', width: '50px' }}>#</th>
+                        <th style={{ padding: '12px 10px', fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)' }}>Medicine</th>
+                        <th style={{ padding: '12px 10px', fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', width: '120px' }}>Dosage</th>
+                        <th style={{ padding: '12px 10px', fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', width: '150px' }}>Frequency</th>
+                        <th style={{ padding: '12px 10px', fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', width: '100px' }}>Duration</th>
+                        <th style={{ padding: '12px 10px', fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', width: '80px', textAlign: 'right' }}>Qty</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rxItems.map((item, idx) => (
+                        <tr key={item.id} style={{ borderBottom: '1px solid var(--border)', verticalAlign: 'top' }}>
+                          <td style={{ padding: '14px 10px', fontSize: '13.5px', color: 'var(--text-secondary)' }}>{idx + 1}</td>
+                          <td style={{ padding: '14px 10px', fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>
+                            {item.medicine_name}
+                            {item.instructions && (
+                              <div style={{ 
+                                fontSize: '12px', 
+                                fontWeight: '500', 
+                                color: '#b45309', 
+                                background: 'rgba(245,158,11,0.06)',
+                                border: '1px solid rgba(245,158,11,0.15)',
+                                padding: '4px 8px',
+                                borderRadius: '6px',
+                                marginTop: '6px',
+                                display: 'inline-block',
+                                fontStyle: 'italic'
+                              }}>
+                                Instruction: {item.instructions}
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: '14px 10px', fontSize: '13.5px', color: 'var(--text-primary)' }}>{item.dosage || '—'}</td>
+                          <td style={{ padding: '14px 10px', fontSize: '13.5px', color: 'var(--text-primary)' }}>{item.frequency || '—'}</td>
+                          <td style={{ padding: '14px 10px', fontSize: '13.5px', color: 'var(--text-primary)' }}>{item.duration || '—'}</td>
+                          <td style={{ padding: '14px 10px', fontSize: '14.5px', fontWeight: '700', color: 'var(--success)', textAlign: 'right' }}>{item.quantity || 1}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
+              )}
             </div>
           </div>
 

@@ -628,6 +628,18 @@ select.input {
     padding: 0 !important;
   }
 
+  /* Compact table style adjustments for high-contrast print */
+  .prescription-meds-table th {
+    border-bottom: 2px solid #000 !important;
+    color: #000 !important;
+    padding: 8px 4px !important;
+  }
+  .prescription-meds-table td {
+    border-bottom: 1px solid #ddd !important;
+    color: #000 !important;
+    padding: 8px 4px !important;
+  }
+
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
