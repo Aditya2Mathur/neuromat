@@ -1,0 +1,18 @@
+# Root-level ignores
+node_modules/
+.DS_Store
+*.log
+npm-debug.log*
+
+# Environment files — NEVER commit these
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+dist/
+build/
+
+# OS files
+Thumbs.db
+desktop.ini
