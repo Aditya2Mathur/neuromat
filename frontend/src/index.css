@@ -568,10 +568,70 @@ select.input {
 .tooltip:hover::after { opacity: 1; }
 
 /* ─── Print ───────────────────────────────────────────────────── */
+.print-only-spacer,
+.print-only-patient-header {
+  display: none !important;
+}
+
 @media print {
   body             { background: #fff !important; color: #000 !important; }
   .no-print        { display: none !important; }
   .print-only      { display: block !important; }
+
+  /* Hide all icons (SVGs) on the printout */
+  svg {
+    display: none !important;
+  }
+
+  /* Spacer to leave 400px (approx 38mm on A4) gap for letterhead */
+  .print-only-spacer {
+    display: block !important;
+    height: 38mm !important;
+  }
+
+  .print-only-patient-header {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  /* Reset layout for print */
+  aside, header {
+    display: none !important;
+  }
+
+  .main-content-wrapper {
+    margin-left: 0 !important;
+    padding: 0 !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  .prescription-grid {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  .prescription-right {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  /* Clean up cards for printing on physical letterhead */
+  .card {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 }
 .print-only { display: none; }
 

@@ -111,25 +111,7 @@ export default function PharmacyQueue() {
 
   /* ── Print ────────────────────────────────────── */
   const handlePrint = () => {
-    if (!printRef.current) return
-    const w = window.open('', '_blank')
-    w.document.write(`<!DOCTYPE html><html><head>
-      <title>Prescription - ${activeEntry?.patients?.name}</title>
-      <style>
-        body{font-family:Arial,sans-serif;padding:24px;color:#000;font-size:13px}
-        h1{font-size:20px;font-weight:700;margin-bottom:2px}
-        .sub{color:#555;font-size:12px;margin-bottom:16px}
-        table{width:100%;border-collapse:collapse;margin-top:16px}
-        th,td{border:1px solid #ddd;padding:8px 12px;text-align:left}
-        th{background:#f5f5f5;font-weight:600}
-        .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
-        .field label{font-weight:600;color:#555;font-size:11px}
-        .diag{padding:10px 12px;background:#f9f9f9;border:1px solid #ddd;border-radius:4px;margin-bottom:12px}
-        .footer{margin-top:40px;border-top:1px solid #ddd;padding-top:12px;font-size:11px;color:#777}
-      </style>
-    </head><body>${printRef.current.innerHTML}</body></html>`)
-    w.document.close()
-    w.print()
+    window.print()
   }
 
   /* ── WhatsApp ─────────────────────────────────── */
@@ -280,8 +262,43 @@ export default function PharmacyQueue() {
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 0 }} className="animate-fade-in">
 
+      {/* Print-only spacer & header */}
+      <div className="print-only-spacer" />
+      
+      <div className="print-only-patient-header">
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 20 }}>
+          <tbody>
+            <tr>
+              <td style={{ padding: '6px 0', fontSize: '14px', color: '#000' }}>
+                <strong>Patient Name:</strong> {pat.name}
+              </td>
+              <td style={{ padding: '6px 0', fontSize: '14px', color: '#000', textAlign: 'right' }}>
+                <strong>Doctor:</strong> {doc.name}
+              </td>
+            </tr>
+            <tr>
+              <td style={{ padding: '6px 0', fontSize: '13px', color: '#000' }}>
+                <strong>Age/Gender:</strong> {pat.age ? `${pat.age} yrs` : '—'} / {pat.gender || '—'}
+              </td>
+              <td style={{ padding: '6px 0', fontSize: '13px', color: '#000', textAlign: 'right' }}>
+                <strong>Specialty:</strong> {doc.specialty || '—'}
+              </td>
+            </tr>
+            <tr>
+              <td style={{ padding: '6px 0', fontSize: '13px', color: '#000' }}>
+                <strong>Weight:</strong> {pat.weight ? `${pat.weight} kg` : '—'} | <strong>Phone:</strong> {pat.phone || '—'}
+              </td>
+              <td style={{ padding: '6px 0', fontSize: '13px', color: '#000', textAlign: 'right' }}>
+                <strong>Date:</strong> {format(new Date(activeEntry.created_at || Date.now()), 'dd MMM yyyy')} | <strong>Token:</strong> #{activeEntry.token_number}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div style={{ borderBottom: '2px solid #000', marginBottom: 20 }} />
+      </div>
+
       {/* ── Top bar ─────────────────────────────────── */}
-      <div style={{
+      <div className="no-print" style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         gap: 16, marginBottom: 24, flexWrap: 'wrap',
       }}>
@@ -325,10 +342,10 @@ export default function PharmacyQueue() {
       </div>
 
       {/* ── 2-column layout ─────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 20, alignItems: 'start' }}>
+      <div className="prescription-grid" style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 20, alignItems: 'start' }}>
 
         {/* ═══ LEFT — Patient & Prescription Info ════ */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: 20 }}>
+        <div className="prescription-left no-print" style={{ display: 'flex', flexDirection: 'column', gap: 16, position: 'sticky', top: 20 }}>
 
           {/* Patient card */}
           <div className="card" style={{ overflow: 'hidden' }}>
@@ -413,7 +430,7 @@ export default function PharmacyQueue() {
           </div>
 
           {/* Validity */}
-          <div style={{
+          <div className="no-print" style={{
             padding: '12px 14px', borderRadius: 12,
             background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.22)',
             display: 'flex', alignItems: 'flex-start', gap: 10,
@@ -427,7 +444,7 @@ export default function PharmacyQueue() {
           </div>
 
           {/* Summary count */}
-          <div style={{
+          <div className="no-print" style={{
             padding: '14px 16px', borderRadius: 12,
             background: 'rgba(8,145,178,0.06)', border: '1px solid rgba(8,145,178,0.18)',
             display: 'flex', alignItems: 'center', gap: 10,
@@ -445,11 +462,11 @@ export default function PharmacyQueue() {
         </div>
 
         {/* ═══ RIGHT — Prescription Detail Panel ════ */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }} ref={printRef}>
+        <div className="prescription-right" style={{ display: 'flex', flexDirection: 'column', gap: 16 }} ref={printRef}>
 
           {/* Clinic branding (for print) */}
           <div className="card" style={{ overflow: 'hidden' }}>
-            <div style={{
+            <div className="no-print" style={{
               padding: '14px 22px', borderBottom: '1px solid var(--border)',
               background: 'var(--bg-surface)',
               display: 'flex', alignItems: 'center', gap: 10,
@@ -499,7 +516,7 @@ export default function PharmacyQueue() {
 
           {/* Medicines list */}
           <div className="card" style={{ overflow: 'hidden' }}>
-            <div style={{
+            <div className="no-print" style={{
               padding: '14px 22px', borderBottom: '1px solid var(--border)',
               background: 'var(--bg-surface)',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
@@ -614,7 +631,7 @@ export default function PharmacyQueue() {
           </div>
 
           {/* ── Bottom action bar ── */}
-          <div style={{
+          <div className="no-print" style={{
             display: 'flex', gap: 12,
             padding: '18px 22px',
             background: 'var(--bg-card)',

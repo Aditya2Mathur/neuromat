@@ -65,7 +65,7 @@ export default function Layout({ children, activePage, onNavigate }) {
 
       {/* ── Sidebar ─────────────────────────────────────────── */}
       <aside
-        className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}
+        className={`no-print ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}
         style={{
           width: 264,
           flexShrink: 0,
@@ -194,7 +194,7 @@ export default function Layout({ children, activePage, onNavigate }) {
       )}
 
       {/* ── Main area ───────────────────────────────────────── */}
-      <div style={{
+      <div className="main-content-wrapper" style={{
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
@@ -204,7 +204,7 @@ export default function Layout({ children, activePage, onNavigate }) {
       }}>
 
         {/* Topbar */}
-        <header style={{
+        <header className="no-print" style={{
           height: 60,
           flexShrink: 0,
           display: 'flex',
