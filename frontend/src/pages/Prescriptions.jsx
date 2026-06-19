@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { FirstAid, Calendar, Stethoscope, MagnifyingGlass, Printer } from '@phosphor-icons/react'
+import { FirstAid, Calendar, Stethoscope, MagnifyingGlass, Printer, NotePencil, Plus, Trash, Pill, Spinner, Check } from '@phosphor-icons/react'
 import { useAuth } from '../context/AuthContext'
 import { format } from 'date-fns'
+import toast from 'react-hot-toast'
+
+const FREQ_OPTIONS = [
+  'Once daily', 'Twice daily', 'Thrice daily',
+  'Four times daily', 'As needed', 'At bedtime', 'Every 8 hours',
+]
 
 export default function Prescriptions() {
   const { user } = useAuth()
@@ -11,7 +17,136 @@ export default function Prescriptions() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState(null)
 
-  useEffect(() => { fetchPrescriptions() }, [])
+  /* Edit state */
+  const [editing, setEditing] = useState(null)
+  const [editDiagnosis, setEditDiagnosis] = useState('')
+  const [editNotes, setEditNotes] = useState('')
+  const [editItems, setEditItems] = useState([])
+  const [medicines, setMedicines] = useState([])
+  const [medSuggestions, setMedSuggestions] = useState(null) // {idx, list}
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    fetchPrescriptions()
+    fetchMedicines()
+  }, [])
+
+  const fetchMedicines = async () => {
+    const { data } = await supabase.from('medicines').select('*')
+      .eq('is_active', true).gt('stock_quantity', 0).order('name')
+    setMedicines(data || [])
+  }
+
+  const startEdit = (rx) => {
+    setEditing(rx)
+    setEditDiagnosis(rx.diagnosis || '')
+    setEditNotes(rx.notes || '')
+    setEditItems((rx.prescription_items || []).map(item => ({
+      medicine_id: item.medicine_id || '',
+      medicine_name: item.medicine_name || '',
+      dosage: item.dosage || '',
+      frequency: item.frequency || '',
+      duration: item.duration || '',
+      quantity: item.quantity || 1,
+      instructions: item.instructions || '',
+    })))
+    setMedSuggestions(null)
+  }
+
+  const addEditMedItem = () => {
+    setEditItems(items => [
+      ...items,
+      {
+        medicine_id: '',
+        medicine_name: '',
+        dosage: '',
+        frequency: '',
+        duration: '',
+        quantity: 1,
+        instructions: '',
+      }
+    ])
+  }
+
+  const updateEditItem = (idx, field, val) => {
+    setEditItems(items =>
+      items.map((item, i) => (i === idx ? { ...item, [field]: val } : item))
+    )
+  }
+
+  const removeEditItem = (idx) => {
+    setEditItems(items => items.filter((_, i) => i !== idx))
+  }
+
+  const onEditMedInput = (val, idx) => {
+    updateEditItem(idx, 'medicine_name', val)
+    if (val.length >= 2) {
+      const hits = medicines
+        .filter(m => m.name.toLowerCase().includes(val.toLowerCase()))
+        .slice(0, 8)
+      setMedSuggestions({ idx, list: hits })
+    } else {
+      setMedSuggestions(null)
+    }
+  }
+
+  const pickEditMedicine = (med, idx) => {
+    updateEditItem(idx, 'medicine_id', med.id)
+    updateEditItem(idx, 'medicine_name', med.name)
+    setMedSuggestions(null)
+  }
+
+  const savePrescription = async () => {
+    if (!editDiagnosis)
+      return toast.error('Diagnosis is required')
+    if (editItems.length === 0)
+      return toast.error('Add at least one medicine')
+    if (editItems.some(i => !i.medicine_name))
+      return toast.error('All medicines need names')
+
+    setSaving(true)
+    try {
+      const { error: rxError } = await supabase
+        .from('prescriptions')
+        .update({
+          diagnosis: editDiagnosis,
+          notes: editNotes,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editing.id)
+      if (rxError) throw rxError
+
+      const { error: delError } = await supabase
+        .from('prescription_items')
+        .delete()
+        .eq('prescription_id', editing.id)
+      if (delError) throw delError
+
+      const { error: insError } = await supabase
+        .from('prescription_items')
+        .insert(
+          editItems.map(item => ({
+            prescription_id: editing.id,
+            medicine_id: item.medicine_id || null,
+            medicine_name: item.medicine_name,
+            dosage: item.dosage,
+            frequency: item.frequency,
+            duration: item.duration,
+            quantity: item.quantity || 1,
+            instructions: item.instructions,
+          }))
+        )
+      if (insError) throw insError
+
+      toast.success('✅ Prescription updated successfully!')
+      setEditing(null)
+      fetchPrescriptions()
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const fetchPrescriptions = async () => {
     setLoading(true)
@@ -105,10 +240,22 @@ export default function Prescriptions() {
                     </span>
                   </td>
                   <td>
-                    <button
-                      onClick={() => setSelected(rx)}
-                      className="btn btn-sm btn-secondary"
-                    >View</button>
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                      {user?.role === 'doctor' && rx.status === 'pending' && (
+                        <button
+                          onClick={() => startEdit(rx)}
+                          className="btn btn-sm btn-secondary"
+                          style={{ gap: 6 }}
+                        >
+                          <NotePencil size={14} />
+                          Edit
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setSelected(rx)}
+                        className="btn btn-sm btn-secondary"
+                      >View</button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -123,7 +270,23 @@ export default function Prescriptions() {
           <div className="modal modal-lg">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Prescription Detail</h3>
-              <button onClick={() => setSelected(null)} className="btn btn-sm btn-secondary btn-icon">✕</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {user?.role === 'doctor' && selected.status === 'pending' && (
+                  <button
+                    onClick={() => {
+                      const rxToEdit = selected
+                      setSelected(null)
+                      startEdit(rxToEdit)
+                    }}
+                    className="btn btn-sm btn-primary"
+                    style={{ gap: 6 }}
+                  >
+                    <NotePencil size={14} />
+                    Edit
+                  </button>
+                )}
+                <button onClick={() => setSelected(null)} className="btn btn-sm btn-secondary btn-icon">✕</button>
+              </div>
             </div>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -174,6 +337,212 @@ export default function Prescriptions() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editing && (
+        <div className="modal-overlay">
+          <div className="modal modal-lg">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Edit Prescription</h3>
+              <button onClick={() => setEditing(null)} className="btn btn-sm btn-secondary btn-icon">✕</button>
+            </div>
+            
+            <div style={{ maxHeight: 'calc(80vh - 120px)', overflowY: 'auto', paddingRight: '8px' }} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="rounded-xl p-4" style={{ background: 'var(--bg-elevated)' }}>
+                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Patient</div>
+                  <div className="font-semibold mt-0.5">{editing.patients?.name}</div>
+                  <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{editing.patients?.phone}</div>
+                </div>
+                <div className="rounded-xl p-4" style={{ background: 'var(--bg-elevated)' }}>
+                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Doctor</div>
+                  <div className="font-semibold mt-0.5">{editing.doctors?.name}</div>
+                  <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{editing.doctors?.specialty}</div>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>Diagnosis *</label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="e.g. Acute Headache..."
+                  value={editDiagnosis}
+                  onChange={e => setEditDiagnosis(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>Clinical Notes & Instructions</label>
+                <textarea
+                  className="input"
+                  placeholder="Additional observations, instructions..."
+                  value={editNotes}
+                  onChange={e => setEditNotes(e.target.value)}
+                  style={{ minHeight: 80 }}
+                />
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <div className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>MEDICINES</div>
+                  <button
+                    onClick={addEditMedItem}
+                    className="btn btn-primary btn-sm"
+                    style={{ gap: 6 }}
+                  >
+                    <Plus size={14} weight="bold" /> Add Medicine
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {editItems.map((item, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        background: 'var(--bg-surface)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 12,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 14px',
+                        background: 'rgba(99,102,241,0.04)',
+                        borderBottom: '1px solid var(--border)',
+                      }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                          Medicine #{idx + 1}
+                        </span>
+                        <button
+                          onClick={() => removeEditItem(idx)}
+                          className="btn btn-icon btn-danger btn-sm"
+                          style={{ width: 28, height: 28, padding: 0 }}
+                        >
+                          <Trash size={13} />
+                        </button>
+                      </div>
+
+                      <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{ position: 'relative' }}>
+                          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Medicine Name *</label>
+                          <input
+                            type="text"
+                            className="input"
+                            placeholder="Search medicine from inventory…"
+                            value={item.medicine_name}
+                            onChange={e => onEditMedInput(e.target.value, idx)}
+                            onBlur={() => setTimeout(() => setMedSuggestions(null), 200)}
+                          />
+                          {medSuggestions?.idx === idx && medSuggestions.list.length > 0 && (
+                            <div style={{
+                              position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+                              background: 'var(--bg-card)',
+                              border: '1px solid var(--border)',
+                              borderRadius: 8,
+                              boxShadow: 'var(--shadow-lg)',
+                              zIndex: 1200,
+                              overflow: 'hidden',
+                            }}>
+                              {medSuggestions.list.map(med => (
+                                <button
+                                  key={med.id}
+                                  type="button"
+                                  onMouseDown={() => pickEditMedicine(med, idx)}
+                                  style={{
+                                    width: '100%', textAlign: 'left',
+                                    padding: '8px 12px',
+                                    background: 'transparent', border: 'none',
+                                    borderBottom: '1px solid var(--border)',
+                                    cursor: 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    gap: 12,
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(99,102,241,0.06)'}
+                                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                >
+                                  <div>
+                                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                                      {med.name}
+                                    </span>
+                                    <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>
+                                      {med.category}
+                                    </span>
+                                  </div>
+                                  <div style={{ fontSize: 11, color: 'var(--success)' }}>
+                                    Stock: {med.stock_quantity}
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr 70px', gap: 10 }}>
+                          <div>
+                            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Dosage</label>
+                            <input type="text" className="input" placeholder="500mg"
+                              value={item.dosage}
+                              onChange={e => updateEditItem(idx, 'dosage', e.target.value)} />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Frequency</label>
+                            <select className="input" value={item.frequency}
+                              onChange={e => updateEditItem(idx, 'frequency', e.target.value)}>
+                              <option value="">Select…</option>
+                              {FREQ_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Duration</label>
+                            <input type="text" className="input" placeholder="5 days"
+                              value={item.duration}
+                              onChange={e => updateEditItem(idx, 'duration', e.target.value)} />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Qty</label>
+                            <input type="number" className="input" min="1"
+                              value={item.quantity}
+                              onChange={e => updateEditItem(idx, 'quantity', parseInt(e.target.value) || 1)} />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4, display: 'block' }}>Instructions</label>
+                          <input type="text" className="input" placeholder="Take after meals"
+                            value={item.instructions}
+                            onChange={e => updateEditItem(idx, 'instructions', e.target.value)} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
+                <button onClick={() => setEditing(null)} className="btn btn-secondary">
+                  Cancel
+                </button>
+                <button
+                  onClick={savePrescription}
+                  disabled={saving}
+                  className="btn btn-primary"
+                  style={{ minWidth: 140 }}
+                >
+                  {saving ? (
+                    <><Spinner size={16} className="animate-spin" /> Saving…</>
+                  ) : (
+                    <><Check size={16} weight="bold" /> Save Changes</>
+                  )}
+                </button>
               </div>
             </div>
           </div>

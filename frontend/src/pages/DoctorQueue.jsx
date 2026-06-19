@@ -91,6 +91,29 @@ export default function DoctorQueue() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const startEditPrescription = async (entry) => {
+    setActiveEntry(entry)
+    // Fetch prescription items
+    const { data: items, error } = await supabase
+      .from('prescription_items')
+      .select('*')
+      .eq('prescription_id', entry.prescription_id)
+    
+    if (error) {
+      toast.error('Failed to load prescription items: ' + error.message)
+      return
+    }
+
+    setPrescription({
+      id: entry.prescription_id,
+      diagnosis: entry.prescriptions?.diagnosis || '',
+      notes: entry.prescriptions?.notes || '',
+      items: items || []
+    })
+    setMedSuggestions(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const closePrescribe = () => {
     setActiveEntry(null)
     setPrescription({ diagnosis: '', notes: '', items: [] })
@@ -147,37 +170,78 @@ export default function DoctorQueue() {
     setSubmitting(true)
     try {
       const doctorId = user?.doctor_id || user?.doctor?.id || activeEntry?.doctor_id
-      const { data: rx, error } = await supabase.from('prescriptions').insert({
-        patient_id:  activeEntry.patient_id,
-        doctor_id:   doctorId,
-        diagnosis:   prescription.diagnosis,
-        notes:       prescription.notes,
-        status:      'pending',
-        visit_date:  new Date().toISOString(),
-        expiry_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-      }).select().single()
-      if (error) throw error
+      let rxId = prescription.id
 
-      await supabase.from('prescription_items').insert(
-        prescription.items.map(item => ({
-          prescription_id: rx.id,
-          medicine_id:     item.medicine_id || null,
-          medicine_name:   item.medicine_name,
-          dosage:          item.dosage,
-          frequency:       item.frequency,
-          duration:        item.duration,
-          quantity:        item.quantity || 1,
-          instructions:    item.instructions,
-        }))
-      )
+      if (rxId) {
+        // Edit flow
+        const { error: rxError } = await supabase
+          .from('prescriptions')
+          .update({
+            diagnosis:   prescription.diagnosis,
+            notes:       prescription.notes,
+            updated_at:  new Date().toISOString(),
+          })
+          .eq('id', rxId)
+        if (rxError) throw rxError
 
-      await supabase.from('queue').update({
-        status: 'completed',
-        prescription_id: rx.id,
-        updated_at: new Date().toISOString(),
-      }).eq('id', activeEntry.id)
+        // Delete old items
+        const { error: delError } = await supabase
+          .from('prescription_items')
+          .delete()
+          .eq('prescription_id', rxId)
+        if (delError) throw delError
 
-      toast.success('✅ Prescription sent to pharmacy!')
+        // Insert new items
+        const { error: insError } = await supabase.from('prescription_items').insert(
+          prescription.items.map(item => ({
+            prescription_id: rxId,
+            medicine_id:     item.medicine_id || null,
+            medicine_name:   item.medicine_name,
+            dosage:          item.dosage,
+            frequency:       item.frequency,
+            duration:        item.duration,
+            quantity:        item.quantity || 1,
+            instructions:    item.instructions,
+          }))
+        )
+        if (insError) throw insError
+
+        toast.success('✅ Prescription updated successfully!')
+      } else {
+        // Create flow
+        const { data: rx, error } = await supabase.from('prescriptions').insert({
+          patient_id:  activeEntry.patient_id,
+          doctor_id:   doctorId,
+          diagnosis:   prescription.diagnosis,
+          notes:       prescription.notes,
+          status:      'pending',
+          visit_date:  new Date().toISOString(),
+          expiry_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+        }).select().single()
+        if (error) throw error
+        rxId = rx.id
+
+        await supabase.from('prescription_items').insert(
+          prescription.items.map(item => ({
+            prescription_id: rxId,
+            medicine_id:     item.medicine_id || null,
+            medicine_name:   item.medicine_name,
+            dosage:          item.dosage,
+            frequency:       item.frequency,
+            duration:        item.duration,
+            quantity:        item.quantity || 1,
+            instructions:    item.instructions,
+          }))
+        )
+
+        await supabase.from('queue').update({
+          status: 'completed',
+          prescription_id: rxId,
+          updated_at: new Date().toISOString(),
+        }).eq('id', activeEntry.id)
+
+        toast.success('✅ Prescription sent to pharmacy!')
+      }
       closePrescribe()
     } catch (err) {
       toast.error(err.message)
@@ -235,6 +299,7 @@ export default function DoctorQueue() {
               const isNext = idx === 0 && entry.status === 'waiting'
               const canCall = entry.status === 'waiting' && user?.role === 'doctor'
               const canPrescribe = entry.status === 'with_doctor' && user?.role === 'doctor'
+              const canEdit = entry.status === 'completed' && user?.role === 'doctor' && entry.prescription_id
 
               return (
                 <div
@@ -315,6 +380,17 @@ export default function DoctorQueue() {
                           Write Prescription
                         </button>
                       )}
+                      {canEdit && (
+                        <button
+                          id={`edit-rx-${entry.id}`}
+                          onClick={() => startEditPrescription(entry)}
+                          className="btn btn-secondary btn-sm"
+                          style={{ gap: 8 }}
+                        >
+                          <NotePencil size={15} weight="bold" />
+                          Edit Prescription
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -350,7 +426,7 @@ export default function DoctorQueue() {
           </button>
           <div>
             <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }}>
-              Write Prescription
+              {prescription.id ? 'Edit Prescription' : 'Write Prescription'}
             </h2>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
               Token #{activeEntry.token_number} · {format(new Date(), 'dd MMM yyyy, hh:mm a')}
@@ -364,10 +440,11 @@ export default function DoctorQueue() {
           disabled={submitting}
           className="btn btn-primary btn-lg"
         >
-          {submitting
-            ? <><Spinner size={17} className="animate-spin" /> Sending…</>
-            : <><Check size={17} weight="bold" /> Send to Pharmacy</>
-          }
+          {submitting ? (
+            <><Spinner size={17} className="animate-spin" /> {prescription.id ? 'Updating…' : 'Sending…'}</>
+          ) : (
+            <><Check size={17} weight="bold" /> {prescription.id ? 'Update & Send' : 'Send to Pharmacy'}</>
+          )}
         </button>
       </div>
 
@@ -784,10 +861,11 @@ export default function DoctorQueue() {
                 className="btn btn-primary"
                 style={{ minWidth: 180 }}
               >
-                {submitting
-                  ? <><Spinner size={16} className="animate-spin" /> Sending…</>
-                  : <><Check size={16} weight="bold" /> Send to Pharmacy</>
-                }
+                {submitting ? (
+                  <><Spinner size={16} className="animate-spin" /> {prescription.id ? 'Updating…' : 'Sending…'}</>
+                ) : (
+                  <><Check size={16} weight="bold" /> {prescription.id ? 'Update & Send' : 'Send to Pharmacy'}</>
+                )}
               </button>
             </div>
           </div>
