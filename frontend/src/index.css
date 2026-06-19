@@ -575,6 +575,7 @@ select.input {
 
 @media print {
   body             { background: #fff !important; color: #000 !important; }
+  .layout-root     { background: transparent !important; height: auto !important; overflow: visible !important; }
   .no-print        { display: none !important; }
   .print-only      { display: block !important; }
 
@@ -652,6 +653,7 @@ select.input {
 
   /* Compact table style adjustments for high-contrast print */
   .prescription-meds-table th {
+    background: transparent !important;
     border-bottom: 2px solid #000 !important;
     color: #000 !important;
     padding: 6px 4px !important;

@@ -61,7 +61,7 @@ export default function Layout({ children, activePage, onNavigate }) {
   const pageTitle = navItems.find(n => n.id === activePage)?.label || 'Dashboard'
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg-page)' }}>
+    <div className="layout-root" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg-page)' }}>
 
       {/* ── Sidebar ─────────────────────────────────────────── */}
       <aside
