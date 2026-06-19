@@ -685,6 +685,17 @@ select.input {
 .print-only { display: none; }
 
 /* ─── Responsive tweaks ───────────────────────────────────────── */
+.main-content-wrapper {
+  margin-left: 0;
+  transition: margin-left 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (min-width: 1024px) {
+  .main-content-wrapper {
+    margin-left: 264px;
+  }
+}
+
 @media (max-width: 768px) {
   .modal          { padding: 20px; }
   .modal-overlay  { padding: 20px 12px; }

@@ -112,7 +112,6 @@ export default function Layout({ children, activePage, onNavigate }) {
             <button
               className="lg:hidden btn btn-icon btn-secondary"
               onClick={() => setSidebarOpen(false)}
-              style={{ display: 'none' }}
             >
               <X size={16} />
             </button>
@@ -200,7 +199,6 @@ export default function Layout({ children, activePage, onNavigate }) {
         flexDirection: 'column',
         minWidth: 0,
         overflow: 'hidden',
-        marginLeft: 264,
       }}>
 
         {/* Topbar */}
@@ -218,8 +216,7 @@ export default function Layout({ children, activePage, onNavigate }) {
           {/* Left */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <button
-              className="btn btn-icon btn-secondary"
-              style={{ display: 'none' }}
+              className="lg:hidden btn btn-icon btn-secondary"
               onClick={() => setSidebarOpen(true)}
             >
               <List size={18} />
