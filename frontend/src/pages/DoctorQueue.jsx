@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import {
   Queue, ArrowLeft, ArrowRight, Check, Stethoscope,
   Plus, Trash, Pill, Spinner, User, Clock, FirstAid,
-  NotePencil, Warning, Heart, Scales,
+  NotePencil, Warning, Heart, Scales, X,
 } from '@phosphor-icons/react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -40,10 +40,23 @@ export default function DoctorQueue() {
   const [medicines,    setMedicines]   = useState([])
   const [medSuggestions, setMedSuggestions] = useState(null) // {idx, list}
 
+  /* Edit patient details states */
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editPatient, setEditPatient] = useState(null)
+  const [editForm, setEditForm] = useState({ name: '', phone: '', age: '', gender: '', weight: '', address: '' })
+  const [savingPatient, setSavingPatient] = useState(false)
+
+  /* Historical suggestions states */
+  const [suggestionsDb, setSuggestionsDb] = useState({ diagnoses: [], notesLines: [], instructions: [] })
+  const [diagnosisSuggestions, setDiagnosisSuggestions] = useState(null)
+  const [notesSuggestions, setNotesSuggestions] = useState(null)
+  const [instSuggestions, setInstSuggestions] = useState(null)
+
   /* ── Data fetching ──────────────────────────── */
   useEffect(() => {
     fetchQueue()
     fetchMedicines()
+    fetchSuggestionsDb()
     const sub = supabase.channel('dq-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'queue' }, fetchQueue)
       .subscribe()
@@ -73,6 +86,151 @@ export default function DoctorQueue() {
     const { data } = await supabase.from('medicines').select('*')
       .eq('is_active', true).gt('stock_quantity', 0).order('name')
     setMedicines(data || [])
+  }
+
+  const fetchSuggestionsDb = async () => {
+    try {
+      const { data: rxData } = await supabase
+        .from('prescriptions')
+        .select('diagnosis, notes')
+        .order('created_at', { ascending: false })
+        .limit(1000)
+
+      const { data: itemData } = await supabase
+        .from('prescription_items')
+        .select('instructions')
+        .order('id', { ascending: false })
+        .limit(2000)
+
+      const diagnoses = new Set()
+      const notesLines = new Set()
+      const instructions = new Set()
+
+      rxData?.forEach(r => {
+        if (r.diagnosis?.trim()) diagnoses.add(r.diagnosis.trim())
+        if (r.notes) {
+          r.notes.split('\n').forEach(line => {
+            const trimmed = line.trim()
+            if (trimmed.length >= 2) notesLines.add(trimmed)
+          })
+        }
+      })
+
+      itemData?.forEach(item => {
+        if (item.instructions?.trim()) instructions.add(item.instructions.trim())
+      })
+
+      setSuggestionsDb({
+        diagnoses: Array.from(diagnoses),
+        notesLines: Array.from(notesLines),
+        instructions: Array.from(instructions)
+      })
+    } catch (err) {
+      console.error('Error loading suggestions db:', err)
+    }
+  }
+
+  const handleSavePatient = async (e) => {
+    e.preventDefault()
+    if (!editForm.name.trim()) return toast.error('Patient name is required')
+    if (!editForm.phone.trim()) return toast.error('Phone number is required')
+
+    setSavingPatient(true)
+    try {
+      const { data, error } = await supabase
+        .from('patients')
+        .update({
+          name: editForm.name.trim(),
+          phone: editForm.phone.trim(),
+          age: editForm.age ? parseInt(editForm.age) : null,
+          gender: editForm.gender || null,
+          weight: editForm.weight ? parseFloat(editForm.weight) : null,
+          address: editForm.address || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editPatient.id)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      toast.success('Patient details updated successfully!')
+      setActiveEntry(prev => ({
+        ...prev,
+        patients: data
+      }))
+      setQueue(prev => prev.map(entry => {
+        if (entry.patient_id === data.id) {
+          return { ...entry, patients: data }
+        }
+        return entry
+      }))
+      setShowEditModal(false)
+    } catch (err) {
+      toast.error(err.message || 'Failed to update patient details')
+    } finally {
+      setSavingPatient(false)
+    }
+  }
+
+  const handleNotesChange = (e) => {
+    const val = e.target.value
+    const selectionStart = e.target.selectionStart
+    setPrescription(p => ({ ...p, notes: val }))
+
+    const beforeCaret = val.slice(0, selectionStart)
+    const linesBefore = beforeCaret.split('\n')
+    const activeLine = linesBefore[linesBefore.length - 1] || ''
+
+    if (activeLine.trim().length >= 2) {
+      const query = activeLine.trim().toLowerCase()
+      const matches = suggestionsDb.notesLines
+        .filter(line => line.toLowerCase().includes(query))
+        .slice(0, 8)
+      setNotesSuggestions({ matches, selectionStart })
+    } else {
+      setNotesSuggestions(null)
+    }
+  }
+
+  const selectNotesSuggestion = (suggestionText) => {
+    if (!notesSuggestions) return
+    const val = prescription.notes
+    const pos = notesSuggestions.selectionStart
+
+    const beforeCaret = val.slice(0, pos)
+    const afterCaret = val.slice(pos)
+
+    const linesBefore = beforeCaret.split('\n')
+    linesBefore[linesBefore.length - 1] = suggestionText
+
+    const newBeforeCaret = linesBefore.join('\n')
+    const newValue = newBeforeCaret + afterCaret
+
+    setPrescription(p => ({ ...p, notes: newValue }))
+    setNotesSuggestions(null)
+
+    setTimeout(() => {
+      const textarea = document.getElementById('notes-textarea')
+      if (textarea) {
+        textarea.focus()
+        const newPos = newBeforeCaret.length
+        textarea.setSelectionRange(newPos, newPos)
+      }
+    }, 50)
+  }
+
+  const onInstInput = (val, idx) => {
+    updateItem(idx, 'instructions', val)
+    if (val.trim().length >= 2) {
+      const query = val.trim().toLowerCase()
+      const matches = suggestionsDb.instructions
+        .filter(ins => ins.toLowerCase().includes(query))
+        .slice(0, 8)
+      setInstSuggestions({ idx, list: matches })
+    } else {
+      setInstSuggestions(null)
+    }
   }
 
   /* ── Open prescription workspace ─────────────── */
@@ -131,11 +289,69 @@ export default function DoctorQueue() {
       }],
     }))
 
+  const parseFrequency = (freq) => {
+    if (!freq) return 1
+    const f = freq.toLowerCase().trim()
+    if (f === 'once daily' || f === 'at bedtime' || f === 'as needed') return 1
+    if (f === 'twice daily') return 2
+    if (f === 'thrice daily') return 3
+    if (f === 'four times daily') return 4
+    if (f === 'every 8 hours') return 3
+    if (f === 'every 12 hours') return 2
+    if (f === 'every 6 hours') return 4
+    
+    // Pattern check like 1-0-1 or 1-1-1
+    const patternMatch = f.match(/^[0-9]+(-[0-9]+)+$/)
+    if (patternMatch) {
+      const parts = f.split('-').map(Number)
+      const sum = parts.reduce((a, b) => a + b, 0)
+      return sum > 0 ? sum : 1
+    }
+    
+    // Single number check
+    const num = parseInt(f)
+    if (!isNaN(num) && num > 0) return num
+    
+    return 1
+  }
+
+  const parseDurationDays = (dur) => {
+    if (!dur) return 1
+    const d = dur.toLowerCase().trim()
+    const numMatch = d.match(/^([0-9\.]+)/)
+    if (!numMatch) return 1
+    const val = parseFloat(numMatch[1])
+    if (isNaN(val)) return 1
+    
+    if (d.includes('week')) {
+      return Math.ceil(val * 7)
+    }
+    if (d.includes('month')) {
+      return Math.ceil(val * 30)
+    }
+    return Math.ceil(val)
+  }
+
   const updateItem = (idx, field, val) =>
-    setPrescription(p => ({
-      ...p,
-      items: p.items.map((item, i) => i === idx ? { ...item, [field]: val } : item),
-    }))
+    setPrescription(p => {
+      const updated = p.items.map((item, i) => {
+        if (i === idx) {
+          const updatedItem = { ...item, [field]: val }
+          if (field === 'frequency' || field === 'duration') {
+            const freq = field === 'frequency' ? val : item.frequency
+            const dur = field === 'duration' ? val : item.duration
+            if (freq && dur) {
+              const dailyCount = parseFrequency(freq)
+              const days = parseDurationDays(dur)
+              updatedItem.quantity = dailyCount * days
+            }
+          }
+          return updatedItem
+        }
+        return item
+      })
+      return { ...p, items: updated }
+    })
 
   const removeItem = (idx) =>
     setPrescription(p => ({ ...p, items: p.items.filter((_, i) => i !== idx) }))
@@ -242,6 +458,7 @@ export default function DoctorQueue() {
 
         toast.success('✅ Prescription sent to pharmacy!')
       }
+      fetchSuggestionsDb()
       closePrescribe()
     } catch (err) {
       toast.error(err.message)
@@ -462,6 +679,35 @@ export default function DoctorQueue() {
               padding: '20px 20px 40px',
               position: 'relative',
             }}>
+              {/* Edit button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setEditPatient(pat)
+                  setEditForm({
+                    name: pat.name || '',
+                    phone: pat.phone || '',
+                    age: pat.age || '',
+                    gender: pat.gender || '',
+                    weight: pat.weight || '',
+                    address: pat.address || '',
+                  })
+                  setShowEditModal(true)
+                }}
+                style={{
+                  position: 'absolute', top: 12, left: 14,
+                  background: 'rgba(255,255,255,0.2)',
+                  border: '1px solid rgba(255,255,255,0.3)',
+                  color: '#fff', padding: '5px', borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', transition: 'all 0.2s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.3)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
+                title="Edit Patient Details"
+              >
+                <NotePencil size={14} weight="bold" />
+              </button>
               <div style={{
                 width: 64, height: 64, borderRadius: '50%',
                 background: 'rgba(255,255,255,0.2)',
@@ -565,7 +811,7 @@ export default function DoctorQueue() {
         {/* ═══ RIGHT — Prescription Form ═══════════════ */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-          {/* ── Diagnosis + Notes card ── */}
+          {/* ── Clinical Notes & Instructions Card ── */}
           <div className="card" style={{ overflow: 'hidden' }}>
             <div style={{
               padding: '16px 22px', borderBottom: '1px solid var(--border)',
@@ -576,13 +822,63 @@ export default function DoctorQueue() {
                 <FirstAid size={16} weight="fill" />
               </div>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Clinical Information</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Diagnosis and clinical notes</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Clinical Notes & Instructions</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Additional observations and follow-up instructions</div>
               </div>
             </div>
 
             <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={fld}>
+                <label style={lbl}>Clinical Notes & Instructions</label>
+                <textarea
+                  id="notes-textarea"
+                  className="input"
+                  placeholder="Additional observations, follow-up instructions, lifestyle advice…"
+                  value={prescription.notes}
+                  onChange={handleNotesChange}
+                  onBlur={() => setTimeout(() => setNotesSuggestions(null), 200)}
+                  style={{ resize: 'vertical', minHeight: 100, fontSize: 14 }}
+                />
+                
+                {/* Notes historical line suggestions */}
+                {notesSuggestions && notesSuggestions.matches.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }} className="animate-fade-in">
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center', fontWeight: 600 }}>Suggestions:</span>
+                    {notesSuggestions.matches.map((s, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        className="tag"
+                        style={{ cursor: 'pointer', transition: 'all 0.15s' }}
+                        onMouseDown={() => selectNotesSuggestion(s)}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Diagnosis Card ── */}
+          <div className="card" style={{ overflow: 'hidden' }}>
+            <div style={{
+              padding: '16px 22px', borderBottom: '1px solid var(--border)',
+              background: 'var(--bg-surface)',
+              display: 'flex', alignItems: 'center', gap: 10,
+            }}>
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(99,102,241,0.12)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Stethoscope size={16} weight="fill" />
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Diagnosis *</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Final clinical diagnosis</div>
+              </div>
+            </div>
+
+            <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ ...fld, position: 'relative' }}>
                 <label style={lbl}>Diagnosis *</label>
                 <input
                   id="diagnosis-input"
@@ -590,20 +886,52 @@ export default function DoctorQueue() {
                   className="input"
                   placeholder="e.g. Acute Headache, Upper Respiratory Tract Infection…"
                   value={prescription.diagnosis}
-                  onChange={e => setPrescription(p => ({ ...p, diagnosis: e.target.value }))}
+                  onChange={e => {
+                    const val = e.target.value
+                    setPrescription(p => ({ ...p, diagnosis: val }))
+                    if (val.trim().length >= 2) {
+                      const query = val.trim().toLowerCase()
+                      const matches = suggestionsDb.diagnoses
+                        .filter(d => d.toLowerCase().includes(query))
+                        .slice(0, 8)
+                      setDiagnosisSuggestions(matches)
+                    } else {
+                      setDiagnosisSuggestions(null)
+                    }
+                  }}
+                  onBlur={() => setTimeout(() => setDiagnosisSuggestions(null), 200)}
                   style={{ fontSize: 14 }}
+                  required
                 />
-              </div>
-
-              <div style={fld}>
-                <label style={lbl}>Clinical Notes & Instructions</label>
-                <textarea
-                  className="input"
-                  placeholder="Additional observations, follow-up instructions, lifestyle advice…"
-                  value={prescription.notes}
-                  onChange={e => setPrescription(p => ({ ...p, notes: e.target.value }))}
-                  style={{ resize: 'vertical', minHeight: 80, fontSize: 14 }}
-                />
+                
+                {/* Diagnosis suggestions dropdown */}
+                {diagnosisSuggestions && diagnosisSuggestions.length > 0 && (
+                  <div className="glass" style={{
+                    position: 'absolute', top: '100%', marginTop: 4, left: 0, right: 0,
+                    zIndex: 150, borderRadius: 12, overflow: 'hidden', boxShadow: 'var(--shadow-lg)',
+                  }}>
+                    {diagnosisSuggestions.map((s, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        style={{
+                          width: '100%', textAlign: 'left', padding: '10px 16px', fontSize: 14,
+                          color: 'var(--text-primary)', borderBottom: '1px solid var(--border)',
+                          background: 'var(--bg-card)', border: 'none', cursor: 'pointer', display: 'block',
+                          fontFamily: 'inherit',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(79,70,229,0.06)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-card)'}
+                        onMouseDown={() => {
+                          setPrescription(p => ({ ...p, diagnosis: s }))
+                          setDiagnosisSuggestions(null)
+                        }}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -799,11 +1127,41 @@ export default function DoctorQueue() {
                         </div>
 
                         {/* Instructions */}
-                        <div style={fld}>
+                        <div style={{ ...fld, position: 'relative' }}>
                           <label style={lbl}>Instructions</label>
                           <input type="text" className="input" placeholder="e.g. Take after meals with water"
                             value={item.instructions}
-                            onChange={e => updateItem(idx, 'instructions', e.target.value)} />
+                            onChange={e => onInstInput(e.target.value, idx)}
+                            onBlur={() => setTimeout(() => setInstSuggestions(null), 200)} />
+
+                          {/* Instructions suggestions dropdown */}
+                          {instSuggestions?.idx === idx && instSuggestions.list.length > 0 && (
+                            <div className="glass" style={{
+                              position: 'absolute', top: '100%', marginTop: 4, left: 0, right: 0,
+                              zIndex: 150, borderRadius: 12, overflow: 'hidden', boxShadow: 'var(--shadow-lg)',
+                            }}>
+                              {instSuggestions.list.map((s, i) => (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  style={{
+                                    width: '100%', textAlign: 'left', padding: '10px 16px', fontSize: 13,
+                                    color: 'var(--text-primary)', borderBottom: '1px solid var(--border)',
+                                    background: 'var(--bg-card)', border: 'none', cursor: 'pointer', display: 'block',
+                                    fontFamily: 'inherit',
+                                  }}
+                                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(79,70,229,0.06)'}
+                                  onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-card)'}
+                                  onMouseDown={() => {
+                                    updateItem(idx, 'instructions', s)
+                                    setInstSuggestions(null)
+                                  }}
+                                >
+                                  {s}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -871,6 +1229,122 @@ export default function DoctorQueue() {
           </div>
         </div>
       </div>
+
+      {/* Edit Patient Profile Modal */}
+      {showEditModal && editPatient && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <div>
+                <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>Edit Patient Profile</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>Update active patient profile details</p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-icon btn-secondary btn-sm"
+                onClick={() => setShowEditModal(false)}
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePatient} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Full Name *</label>
+                <input
+                  type="text"
+                  className="input"
+                  value={editForm.name}
+                  onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Phone Number *</label>
+                <input
+                  type="tel"
+                  className="input"
+                  value={editForm.phone}
+                  onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))}
+                  maxLength={15}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Age</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={editForm.age}
+                    onChange={e => setEditForm(f => ({ ...f, age: e.target.value }))}
+                    min={0}
+                    max={150}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Gender</label>
+                  <select
+                    className="input"
+                    value={editForm.gender}
+                    onChange={e => setEditForm(f => ({ ...f, gender: e.target.value }))}
+                  >
+                    <option value="">Select gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Weight (kg)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="input"
+                  value={editForm.weight}
+                  onChange={e => setEditForm(f => ({ ...f, weight: e.target.value }))}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Address</label>
+                <textarea
+                  className="input"
+                  value={editForm.address}
+                  onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))}
+                  style={{ resize: 'none', height: 80 }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowEditModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingPatient}
+                  className="btn btn-primary"
+                  style={{ minWidth: 120 }}
+                >
+                  {savingPatient ? (
+                    <><Spinner size={14} className="animate-spin" /> Saving…</>
+                  ) : (
+                    'Save Changes'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

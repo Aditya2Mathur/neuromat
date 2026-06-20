@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import {
   UserCircle, Phone, MagnifyingGlass, ArrowRight,
-  Spinner, CheckCircle, Warning,
+  Spinner, CheckCircle, Warning, NotePencil, X,
 } from '@phosphor-icons/react'
 import toast from 'react-hot-toast'
 import { format, differenceInDays } from 'date-fns'
@@ -43,6 +43,12 @@ export default function ReceptionPage({ onNavigate }) {
   const [nameSuggestions, setNameSuggestions] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const nameInputRef = useRef(null)
+
+  /* Edit patient details states */
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editPatient, setEditPatient] = useState(null)
+  const [editForm, setEditForm] = useState({ name: '', phone: '', age: '', gender: '', weight: '', address: '' })
+  const [savingPatient, setSavingPatient] = useState(false)
 
   useEffect(() => { fetchDoctors(); fetchNames() }, [])
 
@@ -96,6 +102,49 @@ export default function ReceptionPage({ onNavigate }) {
         .order('created_at', { ascending: false })
         .limit(1)
       if (visits?.length) setLastVisit(visits[0])
+    }
+  }
+
+  const handleSavePatient = async (e) => {
+    e.preventDefault()
+    if (!editForm.name.trim()) return toast.error('Patient name is required')
+    if (!editForm.phone.trim()) return toast.error('Phone number is required')
+
+    setSavingPatient(true)
+    try {
+      const { data, error } = await supabase
+        .from('patients')
+        .update({
+          name: editForm.name.trim(),
+          phone: editForm.phone.trim(),
+          age: editForm.age ? parseInt(editForm.age) : null,
+          gender: editForm.gender || null,
+          weight: editForm.weight ? parseFloat(editForm.weight) : null,
+          address: editForm.address || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editPatient.id)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      toast.success('Patient details updated successfully!')
+      setExistingPatient(data)
+      setForm(f => ({
+        ...f,
+        name: data.name,
+        age: data.age || '',
+        gender: data.gender || '',
+        weight: data.weight || '',
+        address: data.address || '',
+      }))
+      setPhone(data.phone)
+      setShowEditModal(false)
+    } catch (err) {
+      toast.error(err.message || 'Failed to update patient details')
+    } finally {
+      setSavingPatient(false)
     }
   }
 
@@ -238,10 +287,10 @@ export default function ReceptionPage({ onNavigate }) {
           <div style={{
             marginTop: 16, padding: '14px 16px', borderRadius: 12,
             background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)',
-            display: 'flex', alignItems: 'flex-start', gap: 12,
+            display: 'flex', alignItems: 'center', gap: 12,
           }} className="animate-fade-in">
             <CheckCircle size={20} color="#10b981" weight="fill" style={{ flexShrink: 0, marginTop: 1 }} />
-            <div>
+            <div style={{ flex: 1 }}>
               <p style={{ fontSize: 14, fontWeight: 600, color: '#065f46' }}>Returning Patient Found</p>
               <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
                 {existingPatient.name} · {existingPatient.phone}
@@ -253,6 +302,25 @@ export default function ReceptionPage({ onNavigate }) {
                 )}
               </p>
             </div>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              style={{ gap: 6, padding: '6px 12px' }}
+              onClick={() => {
+                setEditPatient(existingPatient)
+                setEditForm({
+                  name: existingPatient.name,
+                  phone: existingPatient.phone,
+                  age: existingPatient.age || '',
+                  gender: existingPatient.gender || '',
+                  weight: existingPatient.weight || '',
+                  address: existingPatient.address || '',
+                })
+                setShowEditModal(true)
+              }}
+            >
+              <NotePencil size={14} /> Edit Profile
+            </button>
           </div>
         )}
       </div>
@@ -370,6 +438,122 @@ export default function ReceptionPage({ onNavigate }) {
           </button>
         </div>
       </form>
+
+      {/* Edit Patient Profile Modal */}
+      {showEditModal && editPatient && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <div>
+                <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>Edit Patient Profile</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>Update registration info</p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-icon btn-secondary btn-sm"
+                onClick={() => setShowEditModal(false)}
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePatient} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={fieldStyle}>
+                <label style={labelStyle}>Full Name *</label>
+                <input
+                  type="text"
+                  className="input"
+                  value={editForm.name}
+                  onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                  required
+                />
+              </div>
+
+              <div style={fieldStyle}>
+                <label style={labelStyle}>Phone Number *</label>
+                <input
+                  type="tel"
+                  className="input"
+                  value={editForm.phone}
+                  onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))}
+                  maxLength={15}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Age</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={editForm.age}
+                    onChange={e => setEditForm(f => ({ ...f, age: e.target.value }))}
+                    min={0}
+                    max={150}
+                  />
+                </div>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Gender</label>
+                  <select
+                    className="input"
+                    value={editForm.gender}
+                    onChange={e => setEditForm(f => ({ ...f, gender: e.target.value }))}
+                  >
+                    <option value="">Select gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={fieldStyle}>
+                <label style={labelStyle}>Weight (kg)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="input"
+                  value={editForm.weight}
+                  onChange={e => setEditForm(f => ({ ...f, weight: e.target.value }))}
+                />
+              </div>
+
+              <div style={fieldStyle}>
+                <label style={labelStyle}>Address</label>
+                <textarea
+                  className="input"
+                  value={editForm.address}
+                  onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))}
+                  style={{ resize: 'none', height: 80 }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowEditModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingPatient}
+                  className="btn btn-primary"
+                  style={{ minWidth: 120 }}
+                >
+                  {savingPatient ? (
+                    <><Spinner size={14} className="animate-spin" /> Saving…</>
+                  ) : (
+                    'Save Changes'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

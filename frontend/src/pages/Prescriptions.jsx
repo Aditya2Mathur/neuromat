@@ -68,9 +68,67 @@ export default function Prescriptions() {
     ])
   }
 
+  const parseFrequency = (freq) => {
+    if (!freq) return 1
+    const f = freq.toLowerCase().trim()
+    if (f === 'once daily' || f === 'at bedtime' || f === 'as needed') return 1
+    if (f === 'twice daily') return 2
+    if (f === 'thrice daily') return 3
+    if (f === 'four times daily') return 4
+    if (f === 'every 8 hours') return 3
+    if (f === 'every 12 hours') return 2
+    if (f === 'every 6 hours') return 4
+    
+    // Pattern check like 1-0-1 or 1-1-1
+    const patternMatch = f.match(/^[0-9]+(-[0-9]+)+$/)
+    if (patternMatch) {
+      const parts = f.split('-').map(Number)
+      const sum = parts.reduce((a, b) => a + b, 0)
+      return sum > 0 ? sum : 1
+    }
+    
+    // Single number check
+    const num = parseInt(f)
+    if (!isNaN(num) && num > 0) return num
+    
+    return 1
+  }
+
+  const parseDurationDays = (dur) => {
+    if (!dur) return 1
+    const d = dur.toLowerCase().trim()
+    const numMatch = d.match(/^([0-9\.]+)/)
+    if (!numMatch) return 1
+    const val = parseFloat(numMatch[1])
+    if (isNaN(val)) return 1
+    
+    if (d.includes('week')) {
+      return Math.ceil(val * 7)
+    }
+    if (d.includes('month')) {
+      return Math.ceil(val * 30)
+    }
+    return Math.ceil(val)
+  }
+
   const updateEditItem = (idx, field, val) => {
     setEditItems(items =>
-      items.map((item, i) => (i === idx ? { ...item, [field]: val } : item))
+      items.map((item, i) => {
+        if (i === idx) {
+          const updatedItem = { ...item, [field]: val }
+          if (field === 'frequency' || field === 'duration') {
+            const freq = field === 'frequency' ? val : item.frequency
+            const dur = field === 'duration' ? val : item.duration
+            if (freq && dur) {
+              const dailyCount = parseFrequency(freq)
+              const days = parseDurationDays(dur)
+              updatedItem.quantity = dailyCount * days
+            }
+          }
+          return updatedItem
+        }
+        return item
+      })
     )
   }
 

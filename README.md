@@ -28,15 +28,6 @@ You must run the SQL schema manually in Supabase:
 3. Copy all contents and paste into the SQL editor
 4. Click **Run** or press `Ctrl+Enter`
 
-## 🔐 Login Credentials
-
-| Role | Email | Password |
-|------|-------|----------|
-| Admin | admin@neuromat.com | admin 123 |
-| Reception | reception@neuromat.com | reception123 |
-| Dr. Mohd. Shakir | shakir@neuromat.com | doctor123 |
-| Dr. Afifa | afifa@neuromat.com | doctor123 |
-| Medical Store | store@neuromat.com | store123 |
 
 ## 🛠️ Tech Stack
 
