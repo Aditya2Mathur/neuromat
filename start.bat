@@ -16,7 +16,7 @@ echo  Frontend: http://localhost:5173
 echo  Backend:  http://localhost:3001
 echo.
 echo  Login Credentials:
-echo  - Admin:        admin@neuromat.com / admin123
+echo  - Admin:        admin@neuromat.com / admin 123
 echo  - Reception:    reception@neuromat.com / reception123
 echo  - Dr. Shakir:   shakir@neuromat.com / doctor123
 echo  - Dr. Afifa:    afifa@neuromat.com / doctor123

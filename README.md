@@ -32,7 +32,7 @@ You must run the SQL schema manually in Supabase:
 
 | Role | Email | Password |
 |------|-------|----------|
-| Admin | admin@neuromat.com | admin123 |
+| Admin | admin@neuromat.com | admin 123 |
 | Reception | reception@neuromat.com | reception123 |
 | Dr. Mohd. Shakir | shakir@neuromat.com | doctor123 |
 | Dr. Afifa | afifa@neuromat.com | doctor123 |

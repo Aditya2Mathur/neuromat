@@ -31,7 +31,6 @@ CREATE TABLE IF NOT EXISTS medicines (
   unit text DEFAULT 'tablet',
   stock_quantity integer DEFAULT 0,
   low_stock_threshold integer DEFAULT 10,
-  price decimal(10,2) DEFAULT 0,
   is_active boolean DEFAULT true,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
@@ -132,7 +131,7 @@ CREATE POLICY "Allow all" ON name_database FOR ALL USING (true) WITH CHECK (true
 
 -- Insert default staff accounts (password stored as plain for now)
 INSERT INTO staff (name, email, role, password_hash) VALUES
-  ('Admin User', 'admin@neuromat.com', 'admin', 'admin123'),
+  ('Admin User', 'admin@neuromat.com', 'admin', 'admin 123'),
   ('Reception Staff', 'reception@neuromat.com', 'reception', 'reception123'),
   ('Medical Store', 'store@neuromat.com', 'medical_store', 'store123'),
   ('Dr. Mohd. Shakir', 'shakir@neuromat.com', 'doctor', 'doctor123'),
@@ -149,17 +148,17 @@ SET doctor_id = (SELECT id FROM doctors WHERE name = 'Dr. Afifa' LIMIT 1)
 WHERE email = 'afifa@neuromat.com' AND doctor_id IS NULL;
 
 -- Sample medicines (optional - uncomment to add)
-INSERT INTO medicines (name, category, unit, stock_quantity, low_stock_threshold, price) VALUES
-  ('Paracetamol 500mg', 'Analgesic', 'tablet', 500, 50, 2.5),
-  ('Amoxicillin 500mg', 'Antibiotic', 'capsule', 200, 20, 15),
-  ('Omeprazole 20mg', 'Antacid', 'capsule', 150, 20, 8),
-  ('Metformin 500mg', 'Antidiabetic', 'tablet', 300, 30, 5),
-  ('Atorvastatin 10mg', 'Cardiovascular', 'tablet', 100, 15, 12),
-  ('Cetirizine 10mg', 'Antihistamine', 'tablet', 200, 25, 4),
-  ('Ibuprofen 400mg', 'Analgesic', 'tablet', 400, 40, 6),
-  ('Pantoprazole 40mg', 'Antacid', 'tablet', 250, 25, 10),
-  ('Vitamin B Complex', 'Vitamin', 'tablet', 300, 30, 8),
-  ('Calcium + Vitamin D3', 'Supplement', 'tablet', 200, 20, 15)
+INSERT INTO medicines (name, category, unit, stock_quantity, low_stock_threshold) VALUES
+  ('Paracetamol 500mg', 'Analgesic', 'tablet', 500, 50),
+  ('Amoxicillin 500mg', 'Antibiotic', 'capsule', 200, 20),
+  ('Omeprazole 20mg', 'Antacid', 'capsule', 150, 20),
+  ('Metformin 500mg', 'Antidiabetic', 'tablet', 300, 30),
+  ('Atorvastatin 10mg', 'Cardiovascular', 'tablet', 100, 15),
+  ('Cetirizine 10mg', 'Antihistamine', 'tablet', 200, 25),
+  ('Ibuprofen 400mg', 'Analgesic', 'tablet', 400, 40),
+  ('Pantoprazole 40mg', 'Antacid', 'tablet', 250, 25),
+  ('Vitamin B Complex', 'Vitamin', 'tablet', 300, 30),
+  ('Calcium + Vitamin D3', 'Supplement', 'tablet', 200, 20)
 ON CONFLICT (name) DO NOTHING;
 
 -- Function to decrement medicine stock quantity atomically

@@ -25,7 +25,6 @@ CREATE TABLE IF NOT EXISTS medicines (
   unit text DEFAULT 'tablet',
   stock_quantity integer DEFAULT 0,
   low_stock_threshold integer DEFAULT 10,
-  price decimal(10,2) DEFAULT 0,
   is_active boolean DEFAULT true,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
@@ -135,7 +134,7 @@ DO $$ BEGIN
 END $$;
 
 INSERT INTO staff (name, email, role, password_hash) VALUES
-  ('Admin User', 'admin@neuromat.com', 'admin', 'admin123'),
+  ('Admin User', 'admin@neuromat.com', 'admin', 'admin 123'),
   ('Reception Staff', 'reception@neuromat.com', 'reception', 'reception123'),
   ('Medical Store', 'store@neuromat.com', 'medical_store', 'store123'),
   ('Dr. Mohd. Shakir', 'shakir@neuromat.com', 'doctor', 'doctor123'),

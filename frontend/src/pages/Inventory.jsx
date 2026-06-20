@@ -14,7 +14,7 @@ export default function Inventory() {
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState({
     name: '', category: '', unit: 'tablet',
-    stock_quantity: 0, low_stock_threshold: 10, price: 0
+    stock_quantity: 0, low_stock_threshold: 10
   })
   const [saving, setSaving] = useState(false)
 
@@ -42,7 +42,7 @@ export default function Inventory() {
 
   const openAdd = () => {
     setEditing(null)
-    setForm({ name: '', category: '', unit: 'tablet', stock_quantity: 0, low_stock_threshold: 10, price: 0 })
+    setForm({ name: '', category: '', unit: 'tablet', stock_quantity: 0, low_stock_threshold: 10 })
     setShowModal(true)
   }
 
@@ -51,8 +51,7 @@ export default function Inventory() {
     setForm({
       name: med.name, category: med.category || '', unit: med.unit || 'tablet',
       stock_quantity: med.stock_quantity || 0,
-      low_stock_threshold: med.low_stock_threshold || 10,
-      price: med.price || 0
+      low_stock_threshold: med.low_stock_threshold || 10
     })
     setShowModal(true)
   }
@@ -177,9 +176,6 @@ export default function Inventory() {
                     <tr key={med.id}>
                       <td>
                         <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{med.name}</div>
-                        {med.price > 0 && (
-                          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>₹{med.price}</div>
-                        )}
                       </td>
                       <td>
                         <span className="badge badge-secondary">{med.category || 'General'}</span>
@@ -288,7 +284,7 @@ export default function Inventory() {
                   </select>
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>STOCK QTY</label>
                   <input type="number" className="input" min="0"
@@ -300,12 +296,6 @@ export default function Inventory() {
                   <input type="number" className="input" min="1"
                     value={form.low_stock_threshold}
                     onChange={e => setForm(f => ({ ...f, low_stock_threshold: parseInt(e.target.value) || 10 }))} />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>PRICE (₹)</label>
-                  <input type="number" className="input" min="0" step="0.01"
-                    value={form.price}
-                    onChange={e => setForm(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))} />
                 </div>
               </div>
             </div>

@@ -39,7 +39,7 @@ async function diagnose() {
 
   // Try to insert staff accounts (will succeed if table exists)
   const staffAccounts = [
-    { name: 'Admin User', email: 'admin@neuromat.com', role: 'admin', password_hash: 'admin123', is_active: true },
+    { name: 'Admin User', email: 'admin@neuromat.com', role: 'admin', password_hash: 'admin 123', is_active: true },
     { name: 'Reception Staff', email: 'reception@neuromat.com', role: 'reception', password_hash: 'reception123', is_active: true },
     { name: 'Medical Store', email: 'store@neuromat.com', role: 'medical_store', password_hash: 'store123', is_active: true },
     { name: 'Dr. Mohd. Shakir', email: 'shakir@neuromat.com', role: 'doctor', password_hash: 'doctor123', is_active: true },
@@ -75,7 +75,7 @@ async function diagnose() {
     }
 
     console.log('\n🎉 All done! Try logging in now:')
-    console.log('   Admin:      admin@neuromat.com     / admin123')
+    console.log('   Admin:      admin@neuromat.com     / admin 123')
     console.log('   Reception:  reception@neuromat.com / reception123')
     console.log('   Dr. Shakir: shakir@neuromat.com    / doctor123')
     console.log('   Dr. Afifa:  afifa@neuromat.com     / doctor123')
