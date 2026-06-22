@@ -23,26 +23,31 @@ export default function PharmacyQueue() {
   const [activeEntry,   setActiveEntry]  = useState(null)
   const [prescription,  setPrescription] = useState(null)
   const [dispensing,    setDispensing]   = useState(false)
+  const [filter,        setFilter]       = useState('pending')
   const printRef = useRef()
 
   /* ── Realtime + initial load ──────────────────── */
   useEffect(() => {
     fetchQueue()
+  }, [filter])
+
+  useEffect(() => {
     const sub = supabase.channel('pharmacy-queue')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'queue' }, fetchQueue)
       .subscribe()
     return () => supabase.removeChannel(sub)
-  }, [])
+  }, [filter])
 
   const fetchQueue = async () => {
     setLoading(true)
     try {
       const today = format(new Date(), 'yyyy-MM-dd')
+      const statuses = filter === 'dispensed' ? ['done'] : ['completed', 'dispensing']
       const { data } = await supabase
         .from('queue')
         .select('*, patients(*), doctors(*), prescriptions(*, prescription_items(*))')
         .eq('visit_date', today)
-        .in('status', ['completed', 'dispensing'])
+        .in('status', statuses)
         .order('token_number', { ascending: true })
       setQueue(data || [])
     } catch (e) { console.error(e) }
@@ -101,7 +106,7 @@ export default function PharmacyQueue() {
       }
 
       toast.success('✅ Medicines dispensed successfully!')
-      closeDispense()
+      setActiveEntry(prev => ({ ...prev, status: 'done' }))
     } catch (err) {
       toast.error(err.message)
     } finally {
@@ -146,10 +151,28 @@ export default function PharmacyQueue() {
           <div>
             <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>Pharmacy Queue</h2>
             <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 4 }}>
-              {format(new Date(), 'EEEE, MMMM d, yyyy')} · {queue.length} pending prescription{queue.length !== 1 ? 's' : ''}
+              {format(new Date(), 'EEEE, MMMM d, yyyy')} · {queue.length} {filter === 'dispensed' ? 'dispensed' : 'pending'} prescription{queue.length !== 1 ? 's' : ''}
             </p>
           </div>
           <button onClick={fetchQueue} className="btn btn-sm btn-secondary">Refresh</button>
+        </div>
+
+        {/* Filter Tabs */}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            id="filter-pending"
+            onClick={() => setFilter('pending')}
+            className={`btn btn-sm ${filter === 'pending' ? 'btn-primary' : 'btn-secondary'}`}
+          >
+            Pending Prescriptions
+          </button>
+          <button
+            id="filter-dispensed"
+            onClick={() => setFilter('dispensed')}
+            className={`btn btn-sm ${filter === 'dispensed' ? 'btn-primary' : 'btn-secondary'}`}
+          >
+            Dispensed Prescriptions
+          </button>
         </div>
 
         {/* Queue cards */}
@@ -236,11 +259,11 @@ export default function PharmacyQueue() {
                     <button
                       id={`view-rx-${entry.id}`}
                       onClick={() => openDispense(entry)}
-                      className="btn btn-success"
+                      className={`btn ${entry.status === 'done' ? 'btn-secondary' : 'btn-success'}`}
                       style={{ flexShrink: 0, gap: 8 }}
                     >
-                      <Package size={15} weight="fill" />
-                      View & Dispense
+                      {entry.status === 'done' ? <Printer size={15} /> : <Package size={15} weight="fill" />}
+                      {entry.status === 'done' ? 'View & Print' : 'View & Dispense'}
                     </button>
                   </div>
                 </div>
@@ -313,23 +336,36 @@ export default function PharmacyQueue() {
         </div>
 
         {/* Action buttons top */}
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          {activeEntry.status === 'done' && (
+            <span className="badge badge-success" style={{ padding: '8px 14px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <CheckCircle size={15} weight="fill" /> Dispensed
+            </span>
+          )}
           <button onClick={handleWhatsApp} className="btn btn-secondary" style={{ gap: 8 }}>
             <ShareNetwork size={15} /> WhatsApp
           </button>
-          <button onClick={handlePrint} className="btn btn-secondary" style={{ gap: 8 }}>
-            <Printer size={15} /> Print
-          </button>
           <button
-            onClick={dispense}
-            disabled={dispensing}
-            className="btn btn-success btn-lg"
+            id="print-btn-top"
+            onClick={handlePrint}
+            className={`btn ${activeEntry.status === 'done' ? 'btn-primary' : 'btn-secondary'}`}
+            style={{ gap: 8 }}
           >
-            {dispensing
-              ? <><Spinner size={17} className="animate-spin" /> Dispensing…</>
-              : <><CheckCircle size={17} weight="fill" /> Dispense Medicines</>
-            }
+            <Printer size={15} /> {activeEntry.status === 'done' ? 'Print Prescription' : 'Print'}
           </button>
+          {activeEntry.status !== 'done' && (
+            <button
+              id="dispense-btn-top"
+              onClick={dispense}
+              disabled={dispensing}
+              className="btn btn-success btn-lg"
+            >
+              {dispensing
+                ? <><Spinner size={17} className="animate-spin" /> Dispensing…</>
+                : <><CheckCircle size={17} weight="fill" /> Dispense Medicines</>
+              }
+            </button>
+          )}
         </div>
       </div>
 
@@ -590,33 +626,66 @@ export default function PharmacyQueue() {
           <div className="no-print" style={{
             display: 'flex', gap: 12,
             padding: '18px 22px',
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
+            background: activeEntry.status === 'done'
+              ? 'linear-gradient(135deg, rgba(5,150,105,0.06), rgba(6,182,212,0.04))'
+              : 'var(--bg-card)',
+            border: activeEntry.status === 'done'
+              ? '1px solid rgba(5,150,105,0.25)'
+              : '1px solid var(--border)',
             borderRadius: 16,
             alignItems: 'center',
             justifyContent: 'space-between',
             flexWrap: 'wrap',
           }}>
             <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              {rxItems.length} medicine{rxItems.length !== 1 ? 's' : ''} ·{' '}
-              {rxItems.reduce((s, i) => s + (i.quantity || 1), 0)} total units
+              {activeEntry.status === 'done' ? (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--success)', fontWeight: 600 }}>
+                  <CheckCircle size={14} weight="fill" /> Dispensed successfully
+                </span>
+              ) : (
+                <>{rxItems.length} medicine{rxItems.length !== 1 ? 's' : ''} ·{' '}
+                {rxItems.reduce((s, i) => s + (i.quantity || 1), 0)} total units</>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={closeDispense} className="btn btn-secondary">
-                <ArrowLeft size={14} /> Cancel
-              </button>
-              <button
-                id="dispense-btn"
-                onClick={dispense}
-                disabled={dispensing}
-                className="btn btn-success"
-                style={{ minWidth: 200 }}
-              >
-                {dispensing
-                  ? <><Spinner size={16} className="animate-spin" /> Dispensing…</>
-                  : <><CheckCircle size={16} weight="fill" /> Dispense Medicines</>
-                }
-              </button>
+              {activeEntry.status === 'done' ? (
+                <>
+                  <button
+                    id="print-btn-bottom"
+                    onClick={handlePrint}
+                    className="btn btn-success"
+                    style={{ minWidth: 180, gap: 8 }}
+                  >
+                    <Printer size={16} weight="fill" /> Print Prescription
+                  </button>
+                  <button
+                    id="back-to-queue-btn"
+                    onClick={closeDispense}
+                    className="btn btn-secondary"
+                    style={{ minWidth: 140 }}
+                  >
+                    <ArrowLeft size={14} /> Back to Queue
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={closeDispense} className="btn btn-secondary">
+                    <ArrowLeft size={14} /> Cancel
+                  </button>
+                  <button
+                    id="dispense-btn"
+                    onClick={dispense}
+                    disabled={dispensing}
+                    className="btn btn-success"
+                    style={{ minWidth: 200 }}
+                  >
+                    {dispensing
+                      ? <><Spinner size={16} className="animate-spin" /> Dispensing…</>
+                      : <><CheckCircle size={16} weight="fill" /> Dispense Medicines</>
+                    }
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
