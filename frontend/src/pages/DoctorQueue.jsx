@@ -31,6 +31,7 @@ export default function DoctorQueue() {
   /* Queue state */
   const [queue,        setQueue]       = useState([])
   const [loading,      setLoading]     = useState(true)
+  const [filter,       setFilter]      = useState('active')
 
   /* Prescription workspace state */
   const [activeEntry,  setActiveEntry] = useState(null)   // patient being prescribed
@@ -55,22 +56,28 @@ export default function DoctorQueue() {
   /* ── Data fetching ──────────────────────────── */
   useEffect(() => {
     fetchQueue()
+  }, [filter])
+
+  useEffect(() => {
     fetchMedicines()
     fetchSuggestionsDb()
     const sub = supabase.channel('dq-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'queue' }, fetchQueue)
       .subscribe()
     return () => supabase.removeChannel(sub)
-  }, [])
+  }, [filter])
 
   const fetchQueue = async () => {
     setLoading(true)
     try {
       const today = format(new Date(), 'yyyy-MM-dd')
+      const statuses = filter === 'dispensed'
+        ? ['dispensing', 'done']
+        : ['waiting', 'with_doctor', 'completed']
       let q = supabase.from('queue')
         .select('*, patients(*), doctors(*), prescriptions(*)')
         .eq('visit_date', today)
-        .in('status', ['waiting', 'with_doctor', 'completed'])
+        .in('status', statuses)
         .order('token_number', { ascending: true })
       if (user?.role === 'doctor' && user?.doctor_id)
         q = q.eq('doctor_id', user.doctor_id)
@@ -488,10 +495,28 @@ export default function DoctorQueue() {
               {user?.role === 'doctor' ? 'My Patient Queue' : "Today's Queue"}
             </h2>
             <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 4 }}>
-              {format(new Date(), 'EEEE, MMMM d, yyyy')} · {queue.length} patients
+              {format(new Date(), 'EEEE, MMMM d, yyyy')} · {queue.length} {filter === 'dispensed' ? 'dispensed' : 'active'} patient{queue.length !== 1 ? 's' : ''}
             </p>
           </div>
           <button onClick={fetchQueue} className="btn btn-sm btn-secondary">Refresh</button>
+        </div>
+
+        {/* Filter Tabs */}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            id="filter-active"
+            onClick={() => setFilter('active')}
+            className={`btn btn-sm ${filter === 'active' ? 'btn-primary' : 'btn-secondary'}`}
+          >
+            Active Patients
+          </button>
+          <button
+            id="filter-dispensed-rx"
+            onClick={() => setFilter('dispensed')}
+            className={`btn btn-sm ${filter === 'dispensed' ? 'btn-primary' : 'btn-secondary'}`}
+          >
+            Dispensed Prescriptions
+          </button>
         </div>
 
         {/* Queue cards */}
@@ -516,7 +541,8 @@ export default function DoctorQueue() {
               const isNext = idx === 0 && entry.status === 'waiting'
               const canCall = entry.status === 'waiting' && user?.role === 'doctor'
               const canPrescribe = entry.status === 'with_doctor' && user?.role === 'doctor'
-              const canEdit = entry.status === 'completed' && user?.role === 'doctor' && entry.prescription_id
+              const isDispensed = ['dispensing', 'done'].includes(entry.status)
+              const canEdit = ['completed', 'dispensing', 'done'].includes(entry.status) && user?.role === 'doctor' && entry.prescription_id
 
               return (
                 <div
@@ -601,11 +627,11 @@ export default function DoctorQueue() {
                         <button
                           id={`edit-rx-${entry.id}`}
                           onClick={() => startEditPrescription(entry)}
-                          className="btn btn-secondary btn-sm"
+                          className={`btn btn-sm ${isDispensed ? 'btn-secondary' : 'btn-secondary'}`}
                           style={{ gap: 8 }}
                         >
                           <NotePencil size={15} weight="bold" />
-                          Edit Prescription
+                          {isDispensed ? 'View & Edit Rx' : 'Edit Prescription'}
                         </button>
                       )}
                     </div>
@@ -659,11 +685,40 @@ export default function DoctorQueue() {
         >
           {submitting ? (
             <><Spinner size={17} className="animate-spin" /> {prescription.id ? 'Updating…' : 'Sending…'}</>
+          ) : ['dispensing', 'done'].includes(activeEntry.status) ? (
+            <><Check size={17} weight="bold" /> Update Prescription</>
           ) : (
             <><Check size={17} weight="bold" /> {prescription.id ? 'Update & Send' : 'Send to Pharmacy'}</>
           )}
         </button>
       </div>
+
+      {/* Dispensed status notice */}
+      {['dispensing', 'done'].includes(activeEntry.status) && (
+        <div style={{
+          marginBottom: 20, padding: '12px 18px', borderRadius: 12,
+          background: activeEntry.status === 'done'
+            ? 'linear-gradient(135deg, rgba(5,150,105,0.08), rgba(6,182,212,0.04))'
+            : 'rgba(99,102,241,0.07)',
+          border: activeEntry.status === 'done'
+            ? '1px solid rgba(5,150,105,0.28)'
+            : '1px solid rgba(99,102,241,0.22)',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <Warning
+            size={16}
+            color={activeEntry.status === 'done' ? '#059669' : '#6366f1'}
+            weight="fill"
+            style={{ flexShrink: 0 }}
+          />
+          <p style={{ fontSize: 13, color: activeEntry.status === 'done' ? '#065f46' : '#4338ca', lineHeight: 1.5 }}>
+            {activeEntry.status === 'done'
+              ? <><strong>Already Dispensed.</strong> This prescription has been dispensed. You can still edit and save corrections.</>
+              : <><strong>At Pharmacy.</strong> This prescription is being processed at the pharmacy. Your edits will update the record immediately.</>
+            }
+          </p>
+        </div>
+      )}
 
       {/* ── Main 2-column layout ─────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 20, alignItems: 'start' }}>
@@ -1206,11 +1261,12 @@ export default function DoctorQueue() {
             flexWrap: 'wrap',
           }}>
             <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              {prescription.items.length} medicine{prescription.items.length !== 1 ? 's' : ''} · Ready to send
+              {prescription.items.length} medicine{prescription.items.length !== 1 ? 's' : ''} ·{' '}
+              {['dispensing', 'done'].includes(activeEntry.status) ? 'Retrospective edit' : 'Ready to send'}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={closePrescribe} className="btn btn-secondary">
-                <ArrowLeft size={14} /> Cancel
+                <ArrowLeft size={14} /> Back to Queue
               </button>
               <button
                 id="submit-prescription-btn"
@@ -1221,6 +1277,8 @@ export default function DoctorQueue() {
               >
                 {submitting ? (
                   <><Spinner size={16} className="animate-spin" /> {prescription.id ? 'Updating…' : 'Sending…'}</>
+                ) : ['dispensing', 'done'].includes(activeEntry.status) ? (
+                  <><Check size={16} weight="bold" /> Update Prescription</>
                 ) : (
                   <><Check size={16} weight="bold" /> {prescription.id ? 'Update & Send' : 'Send to Pharmacy'}</>
                 )}
