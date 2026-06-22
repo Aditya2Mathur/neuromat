@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { Queue, Clock, CheckCircle, ArrowClockwise } from '@phosphor-icons/react'
+import { Queue, Clock, CheckCircle, ArrowClockwise, NotePencil, X, Spinner } from '@phosphor-icons/react'
 import { format } from 'date-fns'
+import { useAuth } from '../context/AuthContext'
+import toast from 'react-hot-toast'
 
 const STATUS_MAP = {
   waiting:     { label: 'Waiting',     color: '#92400e', bg: 'rgba(217,119,6,0.1)' },
@@ -12,9 +14,16 @@ const STATUS_MAP = {
 }
 
 export default function QueuePage() {
+  const { user } = useAuth()
   const [queue,   setQueue]   = useState([])
   const [loading, setLoading] = useState(true)
   const [filter,  setFilter]  = useState('active')
+
+  /* Edit patient details states */
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editPatient, setEditPatient] = useState(null)
+  const [editForm, setEditForm] = useState({ name: '', phone: '', age: '', gender: '', weight: '', address: '' })
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     fetchQueue()
@@ -34,6 +43,52 @@ export default function QueuePage() {
       .order('token_number', { ascending: true })
     setQueue(data || [])
     setLoading(false)
+  }
+
+  const openEditModal = (p) => {
+    setEditPatient(p)
+    setEditForm({
+      name: p.name,
+      phone: p.phone,
+      age: p.age || '',
+      gender: p.gender || '',
+      weight: p.weight || '',
+      address: p.address || '',
+    })
+    setShowEditModal(true)
+  }
+
+  const handleSavePatient = async (e) => {
+    e.preventDefault()
+    if (!editForm.name.trim()) return toast.error('Patient name is required')
+    if (!editForm.phone.trim()) return toast.error('Phone number is required')
+    setSaving(true)
+    try {
+      const { data, error } = await supabase
+        .from('patients')
+        .update({
+          name: editForm.name.trim(),
+          phone: editForm.phone.trim(),
+          age: editForm.age ? parseInt(editForm.age) : null,
+          gender: editForm.gender || null,
+          weight: editForm.weight ? parseFloat(editForm.weight) : null,
+          address: editForm.address || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editPatient.id)
+        .select()
+        .single()
+
+      if (error) throw error
+      
+      toast.success('Patient details updated successfully!')
+      setShowEditModal(false)
+      fetchQueue()
+    } catch (err) {
+      toast.error(err.message || 'Failed to update patient details')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const filtered = queue.filter(q => {
@@ -155,6 +210,17 @@ export default function QueuePage() {
                     </div>
                   </div>
 
+                  {['admin', 'reception'].includes(user?.role) && entry.patients && (
+                    <button
+                      id={`edit-queue-patient-${entry.id}`}
+                      onClick={() => openEditModal(entry.patients)}
+                      className="btn btn-icon btn-secondary btn-sm"
+                      style={{ flexShrink: 0, padding: 6 }}
+                      title="Edit Patient"
+                    >
+                      <NotePencil size={15} />
+                    </button>
+                  )}
                   {entry.status === 'done' && (
                     <CheckCircle size={22} color="#10b981" weight="fill" style={{ flexShrink: 0 }} />
                   )}
@@ -162,6 +228,115 @@ export default function QueuePage() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Edit Patient Modal */}
+      {showEditModal && editPatient && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 22, paddingBottom: 18, borderBottom: '1px solid var(--border)' }}>
+              <div>
+                <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>Edit Patient Details</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>Update registration details</p>
+              </div>
+              <button onClick={() => setShowEditModal(false)} className="btn btn-icon btn-secondary btn-sm"><X size={14} /></button>
+            </div>
+
+            <form onSubmit={handleSavePatient} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Full Name *</label>
+                <input
+                  id="queue-edit-name"
+                  type="text"
+                  className="input"
+                  value={editForm.name}
+                  onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Phone Number *</label>
+                <input
+                  id="queue-edit-phone"
+                  type="tel"
+                  className="input"
+                  value={editForm.phone}
+                  onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))}
+                  maxLength={15}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Age</label>
+                  <input
+                    type="number"
+                    className="input"
+                    value={editForm.age}
+                    onChange={e => setEditForm(f => ({ ...f, age: e.target.value }))}
+                    min={0}
+                    max={150}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Gender</label>
+                  <select
+                    className="input"
+                    value={editForm.gender}
+                    onChange={e => setEditForm(f => ({ ...f, gender: e.target.value }))}
+                  >
+                    <option value="">Select gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Weight (kg)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="input"
+                  value={editForm.weight}
+                  onChange={e => setEditForm(f => ({ ...f, weight: e.target.value }))}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Address</label>
+                <textarea
+                  className="input"
+                  value={editForm.address}
+                  onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))}
+                  style={{ resize: 'none', height: 80 }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowEditModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  id="queue-save-patient-changes-btn"
+                  type="submit"
+                  disabled={saving}
+                  className="btn btn-primary"
+                  style={{ minWidth: 120 }}
+                >
+                  {saving ? <Spinner size={14} className="animate-spin" /> : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

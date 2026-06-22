@@ -19,6 +19,7 @@ const ROLE_NAV = {
     { id: 'dashboard', label: 'Dashboard',        icon: House },
     { id: 'register',  label: 'Register Patient', icon: UserCircle },
     { id: 'queue',     label: "Today's Queue",    icon: Queue },
+    { id: 'patients',  label: 'Patients',         icon: Users },
   ],
   doctor: [
     { id: 'dashboard',     label: 'Dashboard',    icon: House },
