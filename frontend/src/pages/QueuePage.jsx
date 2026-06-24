@@ -35,11 +35,13 @@ export default function QueuePage() {
 
   const fetchQueue = async () => {
     setLoading(true)
-    const today = format(new Date(), 'yyyy-MM-dd')
+    const today = new Date()
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    const startOfTodayISO = startOfToday.toISOString()
     const { data } = await supabase
       .from('queue')
       .select('*, patients(*), doctors(*), prescriptions(*)')
-      .eq('visit_date', today)
+      .gte('created_at', startOfTodayISO)
       .order('token_number', { ascending: true })
     setQueue(data || [])
     setLoading(false)

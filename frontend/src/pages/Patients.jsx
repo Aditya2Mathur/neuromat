@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { Users, Phone, MagnifyingGlass, Calendar, Stethoscope, X, NotePencil, Spinner } from '@phosphor-icons/react'
+import { Users, Phone, MagnifyingGlass, Calendar, Stethoscope, X, NotePencil, Spinner, Trash } from '@phosphor-icons/react'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
+import { useAuth } from '../context/AuthContext'
 
 export default function Patients() {
+  const { user } = useAuth()
   const [patients, setPatients] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState(null)
   const [patientHistory, setPatientHistory] = useState([])
+  const [period, setPeriod] = useState('all') // 'all', 'daily', 'weekly', 'monthly'
 
   /* Edit patient details states */
   const [showEditModal, setShowEditModal] = useState(false)
@@ -29,10 +32,30 @@ export default function Patients() {
     setLoading(false)
   }
 
-  const filtered = patients.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.phone.includes(search)
-  )
+  const filtered = patients.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.phone.includes(search)
+    if (!matchesSearch) return false
+
+    if (period === 'all') return true
+
+    const patientDate = new Date(p.updated_at)
+    const today = new Date()
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+
+    if (period === 'daily') {
+      return patientDate >= startOfToday
+    } else if (period === 'weekly') {
+      const sevenDaysAgo = new Date(startOfToday)
+      sevenDaysAgo.setDate(startOfToday.getDate() - 6)
+      return patientDate >= sevenDaysAgo
+    } else if (period === 'monthly') {
+      const thirtyDaysAgo = new Date(startOfToday)
+      thirtyDaysAgo.setDate(startOfToday.getDate() - 29)
+      return patientDate >= thirtyDaysAgo
+    }
+
+    return true
+  })
 
   const viewPatient = async (patient) => {
     setSelected(patient)
@@ -91,24 +114,109 @@ export default function Patients() {
     }
   }
 
+  const handleDeletePatient = async (patient) => {
+    const confirm = window.confirm(`Are you sure you want to delete patient "${patient.name}" and all their history completely? This action cannot be undone.`)
+    if (!confirm) return
+
+    setLoading(true)
+    try {
+      // 1. Get all prescriptions for the patient
+      const { data: rxData, error: rxFindError } = await supabase
+        .from('prescriptions')
+        .select('id')
+        .eq('patient_id', patient.id)
+      
+      if (rxFindError) throw rxFindError
+
+      const rxIds = rxData?.map(r => r.id) || []
+
+      // 2. Delete prescription items for those prescriptions
+      if (rxIds.length > 0) {
+        const { error: itemsError } = await supabase
+          .from('prescription_items')
+          .delete()
+          .in('prescription_id', rxIds)
+        if (itemsError) throw itemsError
+      }
+
+      // 3. Delete queue records
+      const { error: queueError } = await supabase
+        .from('queue')
+        .delete()
+        .eq('patient_id', patient.id)
+      if (queueError) throw queueError
+
+      // 4. Delete prescriptions
+      const { error: rxDeleteError } = await supabase
+        .from('prescriptions')
+        .delete()
+        .eq('patient_id', patient.id)
+      if (rxDeleteError) throw rxDeleteError
+
+      // 5. Delete patient record
+      const { error: patientError } = await supabase
+        .from('patients')
+        .delete()
+        .eq('id', patient.id)
+      if (patientError) throw patientError
+
+      toast.success(`Patient "${patient.name}" and all associated data deleted successfully!`)
+      fetchPatients()
+    } catch (err) {
+      toast.error(err.message || 'Failed to delete patient')
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div style={{ maxWidth: 960, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
         <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>Patients</h2>
         <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 4 }}>
-          {patients.length} registered patients
+          {filtered.length === patients.length 
+            ? `${patients.length} registered patients`
+            : `${filtered.length} of ${patients.length} registered patients`}
         </p>
       </div>
 
-      <div className="input-group">
-        <span className="input-icon"><MagnifyingGlass size={16} /></span>
-        <input
-          type="text"
-          className="input"
-          placeholder="Search by name or phone…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="input-group" style={{ flex: 1, minWidth: 260 }}>
+          <span className="input-icon"><MagnifyingGlass size={16} /></span>
+          <input
+            type="text"
+            className="input"
+            placeholder="Search by name or phone…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        
+        {/* Period Selector Segmented Control */}
+        <div style={{ display: 'flex', gap: 4, background: 'var(--bg-card)', padding: 4, borderRadius: 10, border: '1px solid var(--border)', flexShrink: 0 }}>
+          {['all', 'daily', 'weekly', 'monthly'].map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPeriod(p)}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 600,
+                textTransform: 'capitalize',
+                border: 'none',
+                background: period === p ? 'var(--primary)' : 'transparent',
+                color: period === p ? '#fff' : 'var(--text-secondary)',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="card" style={{ overflow: 'hidden' }}>
@@ -174,6 +282,16 @@ export default function Patients() {
                       >
                         <NotePencil size={13} /> Edit
                       </button>
+                      {user?.role === 'admin' && (
+                        <button
+                          id={`delete-patient-${p.id}`}
+                          onClick={() => handleDeletePatient(p)}
+                          className="btn btn-sm btn-danger"
+                          style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                        >
+                          <Trash size={13} /> Delete
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

@@ -17,18 +17,35 @@ import Reports from './pages/Reports'
 function AppContent() {
   const { user } = useAuth()
   const [activePage, setActivePage] = useState('dashboard')
+  const [selectedQueueItem, setSelectedQueueItem] = useState(null)
 
   useEffect(() => {
     setActivePage('dashboard')
+    setSelectedQueueItem(null)
   }, [user?.id])
 
   if (!user) return <Login />
 
   const getPageComponent = () => {
     switch (activePage) {
-      case 'dashboard': return <Dashboard />
+      case 'dashboard':
+        return (
+          <Dashboard
+            onNavigate={setActivePage}
+            onSelectQueueItem={setSelectedQueueItem}
+          />
+        )
       case 'register': return <Reception onNavigate={setActivePage} />
-      case 'queue': return user.role === 'doctor' ? <DoctorQueue onNavigate={setActivePage} /> : <QueuePage />
+      case 'queue':
+        return user.role === 'doctor' ? (
+          <DoctorQueue
+            onNavigate={setActivePage}
+            selectedQueueItem={selectedQueueItem}
+            clearSelectedQueueItem={() => setSelectedQueueItem(null)}
+          />
+        ) : (
+          <QueuePage />
+        )
       case 'prescriptions': return <Prescriptions />
       case 'pharmacy': return <PharmacyQueue />
       case 'medicines':
@@ -36,7 +53,13 @@ function AppContent() {
       case 'doctors': return <Doctors />
       case 'patients': return <Patients />
       case 'reports': return <Reports />
-      default: return <Dashboard />
+      default:
+        return (
+          <Dashboard
+            onNavigate={setActivePage}
+            onSelectQueueItem={setSelectedQueueItem}
+          />
+        )
     }
   }
 

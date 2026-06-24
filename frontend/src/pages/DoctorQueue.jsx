@@ -25,7 +25,7 @@ const FREQ_OPTIONS = [
 ]
 
 /* ════════════════════════════════════════════════ */
-export default function DoctorQueue() {
+export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem }) {
   const { user } = useAuth()
 
   /* Queue state */
@@ -70,13 +70,16 @@ export default function DoctorQueue() {
   const fetchQueue = async () => {
     setLoading(true)
     try {
-      const today = format(new Date(), 'yyyy-MM-dd')
+      const today = new Date()
+      const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+      const startOfTodayISO = startOfToday.toISOString()
+
       const statuses = filter === 'dispensed'
         ? ['dispensing', 'done']
         : ['waiting', 'with_doctor', 'completed']
       let q = supabase.from('queue')
         .select('*, patients(*), doctors(*), prescriptions(*)')
-        .eq('visit_date', today)
+        .gte('created_at', startOfTodayISO)
         .in('status', statuses)
         .order('token_number', { ascending: true })
       if (user?.role === 'doctor' && user?.doctor_id)
@@ -255,6 +258,14 @@ export default function DoctorQueue() {
     // Scroll to top smoothly
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+
+  useEffect(() => {
+    if (selectedQueueItem && !loading) {
+      const found = queue.find(item => item.id === selectedQueueItem.id)
+      openPrescribe(found || selectedQueueItem)
+      clearSelectedQueueItem()
+    }
+  }, [selectedQueueItem, queue, loading])
 
   const startEditPrescription = async (entry) => {
     setActiveEntry(entry)

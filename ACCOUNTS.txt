@@ -1,4 +1,4 @@
-NEUROMAT CLINIC — DEMO ACCOUNTS
+NEUROMAT CLINIC 
 ================================
 
 Role          | Email Address            | Password
