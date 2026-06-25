@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { Queue, Clock, CheckCircle, ArrowClockwise, NotePencil, X, Spinner } from '@phosphor-icons/react'
+import { Queue, Clock, CheckCircle, ArrowClockwise, NotePencil, X, Spinner, WhatsappLogo } from '@phosphor-icons/react'
 import { format } from 'date-fns'
 import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
@@ -91,6 +91,24 @@ export default function QueuePage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleSendWhatsApp = (entry) => {
+    if (!entry.patients) return
+    const phone = entry.patients.phone?.replace(/\D/g, '')
+    const dateStr = format(new Date(entry.created_at), 'dd MMM yyyy')
+    const feeStr = entry.fee === 0 ? 'Free' : `₹${entry.fee || 0}`
+    const msg = encodeURIComponent(
+      `*NEUROMAT CLINIC — TOKEN CONFIRMATION*\n\n` +
+      `Hello *${entry.patients.name}*,\n` +
+      `You have been registered successfully!\n\n` +
+      `🎫 *Token Number:* ${entry.token_number} ${entry.prescription_id ? '(Follow-up)' : ''}\n` +
+      `👨‍⚕️ *Doctor:* ${entry.doctors?.name || 'Assigned Doctor'}\n` +
+      `💵 *Fee:* ${feeStr}\n` +
+      `📅 *Date:* ${dateStr}\n\n` +
+      `Please wait for your turn. Thank you!`
+    )
+    window.open(`https://wa.me/${phone}?text=${msg}`, '_blank')
   }
 
   const filtered = queue.filter(q => {
@@ -200,11 +218,17 @@ export default function QueuePage() {
                       <span style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--text-primary)' }}>
                         {entry.patients?.name}
                       </span>
+                      {entry.prescription_id && (
+                        <span className="badge badge-success" style={{ fontSize: 10, padding: '2px 8px' }}>Follow-up</span>
+                      )}
                       <span className="badge" style={{ background: s.bg, color: s.color }}>{s.label}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 4, fontSize: 12.5, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
                       <span>{entry.patients?.phone}</span>
                       <span>→ {entry.doctors?.name}</span>
+                      <span style={{ fontWeight: 600, color: entry.fee === 0 ? 'var(--success)' : 'var(--text-secondary)' }}>
+                        Fee: {entry.fee === 0 ? 'Free' : `₹${entry.fee || 0}`}
+                      </span>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                         <Clock size={11} />
                         {format(new Date(entry.created_at), 'hh:mm a')}
@@ -213,15 +237,26 @@ export default function QueuePage() {
                   </div>
 
                   {['admin', 'reception'].includes(user?.role) && entry.patients && (
-                    <button
-                      id={`edit-queue-patient-${entry.id}`}
-                      onClick={() => openEditModal(entry.patients)}
-                      className="btn btn-icon btn-secondary btn-sm"
-                      style={{ flexShrink: 0, padding: 6 }}
-                      title="Edit Patient"
-                    >
-                      <NotePencil size={15} />
-                    </button>
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                      <button
+                        id={`whatsapp-queue-patient-${entry.id}`}
+                        onClick={() => handleSendWhatsApp(entry)}
+                        className="btn btn-icon btn-secondary btn-sm"
+                        style={{ padding: 6, color: '#25D366' }}
+                        title="Send WhatsApp Token"
+                      >
+                        <WhatsappLogo size={15} weight="fill" />
+                      </button>
+                      <button
+                        id={`edit-queue-patient-${entry.id}`}
+                        onClick={() => openEditModal(entry.patients)}
+                        className="btn btn-icon btn-secondary btn-sm"
+                        style={{ padding: 6 }}
+                        title="Edit Patient"
+                      >
+                        <NotePencil size={15} />
+                      </button>
+                    </div>
                   )}
                   {entry.status === 'done' && (
                     <CheckCircle size={22} color="#10b981" weight="fill" style={{ flexShrink: 0 }} />

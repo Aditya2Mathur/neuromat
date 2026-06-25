@@ -36,6 +36,7 @@ export default function ReceptionPage({ onNavigate }) {
   const [existingPatient, setExistingPatient] = useState(null)
   const [lastVisit, setLastVisit] = useState(null)
   const [form, setForm] = useState({ name: '', age: '', gender: '', address: '', weight: '', doctor_id: '' })
+  const [fee, setFee] = useState('')
   const [doctors, setDoctors] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [firstNames, setFirstNames] = useState([])
@@ -50,11 +51,98 @@ export default function ReceptionPage({ onNavigate }) {
   const [editForm, setEditForm] = useState({ name: '', phone: '', age: '', gender: '', weight: '', address: '' })
   const [savingPatient, setSavingPatient] = useState(false)
 
+  const [validPrescriptionId, setValidPrescriptionId] = useState(null)
+
   useEffect(() => { fetchDoctors(); fetchNames() }, [])
 
   const fetchDoctors = async () => {
     const { data } = await supabase.from('doctors').select('*').eq('is_active', true).order('name')
     setDoctors(data || [])
+  }
+
+  const handleDoctorChange = (docId) => {
+    setForm(f => ({ ...f, doctor_id: docId }))
+    if (existingPatient) {
+      checkPrescriptionValidity(existingPatient.id, docId)
+    } else {
+      const doc = doctors.find(d => d.id === docId)
+      setFee(doc ? (doc.default_fee !== undefined && doc.default_fee !== null ? doc.default_fee.toString() : '0') : '')
+      setValidPrescriptionId(null)
+    }
+  }
+
+  const checkPrescriptionValidity = async (patientId, doctorId) => {
+    if (!patientId || !doctorId) {
+      setValidPrescriptionId(null)
+      return
+    }
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()
+    const { data } = await supabase
+      .from('prescriptions')
+      .select('*')
+      .eq('patient_id', patientId)
+      .eq('doctor_id', doctorId)
+      .gte('created_at', fiveDaysAgo)
+      .order('created_at', { ascending: false })
+      .limit(1)
+
+    if (data?.length) {
+      const rx = data[0]
+      setFee('0')
+      setValidPrescriptionId(rx.id)
+      toast.success('Valid 5-day prescription found. Fee waived!')
+    } else {
+      const doc = doctors.find(d => d.id === doctorId)
+      setFee(doc ? (doc.default_fee !== undefined && doc.default_fee !== null ? doc.default_fee.toString() : '0') : '')
+      setValidPrescriptionId(null)
+    }
+  }
+
+  const triggerLookup = async (nameVal, phoneVal) => {
+    if (!nameVal.trim() || phoneVal.trim().length < 10) return
+
+    const { data } = await supabase
+      .from('patients')
+      .select('*')
+      .eq('phone', phoneVal.trim())
+      .eq('name', nameVal.trim())
+      .order('updated_at', { ascending: false })
+      .limit(1)
+
+    if (data?.length) {
+      const p = data[0]
+      setExistingPatient(p)
+      setForm(f => ({
+        ...f,
+        name: p.name,
+        age: p.age || '',
+        gender: p.gender || '',
+        address: p.address || '',
+        weight: p.weight || '',
+      }))
+      toast.success('Returning patient details auto-filled!')
+
+      const { data: visits } = await supabase
+        .from('queue').select('*, prescriptions(*)')
+        .eq('patient_id', p.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+      if (visits?.length) setLastVisit(visits[0])
+
+      if (form.doctor_id) {
+        checkPrescriptionValidity(p.id, form.doctor_id)
+      }
+    }
+  }
+
+  const handlePhoneChange = (val) => {
+    setPhone(val)
+    setExistingPatient(null)
+    setLastVisit(null)
+    setValidPrescriptionId(null)
+    if (val.trim().length >= 10 && form.name.trim().length >= 2) {
+      triggerLookup(form.name, val)
+    }
   }
 
   const fetchNames = async () => {
@@ -82,6 +170,7 @@ export default function ReceptionPage({ onNavigate }) {
     setSearching(true)
     setExistingPatient(null)
     setLastVisit(null)
+    setValidPrescriptionId(null)
 
     const { data } = await supabase
       .from('patients').select('*')
@@ -93,7 +182,7 @@ export default function ReceptionPage({ onNavigate }) {
     if (data?.length) {
       const p = data[0]
       setExistingPatient(p)
-      setForm({ name: p.name, age: p.age || '', gender: p.gender || '', address: p.address || '', weight: p.weight || '', doctor_id: '' })
+      setForm({ name: p.name, age: p.age || '', gender: p.gender || '', address: p.address || '', weight: p.weight || '', doctor_id: form.doctor_id || '' })
       toast.success('Patient found! Details auto-filled.')
 
       const { data: visits } = await supabase
@@ -102,6 +191,10 @@ export default function ReceptionPage({ onNavigate }) {
         .order('created_at', { ascending: false })
         .limit(1)
       if (visits?.length) setLastVisit(visits[0])
+
+      if (form.doctor_id) {
+        checkPrescriptionValidity(p.id, form.doctor_id)
+      }
     }
   }
 
@@ -161,6 +254,10 @@ export default function ReceptionPage({ onNavigate }) {
     } else {
       setShowSuggestions(false)
     }
+
+    if (phone.trim().length >= 10 && val.trim().length >= 2) {
+      triggerLookup(val, phone)
+    }
   }
 
   const handleRegister = async (e) => {
@@ -217,12 +314,16 @@ export default function ReceptionPage({ onNavigate }) {
       const { error: qErr } = await supabase.from('queue').insert({
         patient_id: patientId, doctor_id: form.doctor_id,
         token_number: nextToken, status: 'waiting', visit_date: today,
+        fee: fee !== '' ? parseInt(fee) : 0,
+        prescription_id: validPrescriptionId || null,
       })
       if (qErr) throw qErr
 
       toast.success(`✅ Patient registered! Token #${nextToken}`)
       setPhone(''); setExistingPatient(null); setLastVisit(null)
       setForm({ name: '', age: '', gender: '', address: '', weight: '', doctor_id: '' })
+      setFee('')
+      setValidPrescriptionId(null)
       setTimeout(() => onNavigate('queue'), 1200)
     } catch (err) {
       toast.error(err.message || 'Registration failed')
@@ -266,7 +367,7 @@ export default function ReceptionPage({ onNavigate }) {
               className="input"
               placeholder="Enter patient's phone number"
               value={phone}
-              onChange={e => { setPhone(e.target.value); setExistingPatient(null); setLastVisit(null) }}
+              onChange={e => handlePhoneChange(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handlePhoneSearch()}
               maxLength={15}
             />
@@ -405,12 +506,38 @@ export default function ReceptionPage({ onNavigate }) {
             <div style={fieldStyle}>
               <label style={labelStyle}>Assign Doctor *</label>
               <select id="patient-doctor" className="input" value={form.doctor_id}
-                onChange={e => setForm(f => ({ ...f, doctor_id: e.target.value }))} required>
+                onChange={e => handleDoctorChange(e.target.value)} required>
                 <option value="">Select doctor</option>
                 {doctors.map(d => (
                   <option key={d.id} value={d.id}>{d.name} ({d.specialty})</option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          {/* Registration Fee */}
+          <div style={fieldStyle}>
+            <label style={labelStyle}>Registration Fee (₹) *</label>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <input
+                id="patient-fee"
+                type="number"
+                className="input"
+                placeholder="Fee amount"
+                value={fee}
+                onChange={e => setFee(e.target.value)}
+                min={0}
+                style={{ flex: 1 }}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setFee('0')}
+                className="btn btn-secondary"
+                style={{ minWidth: 100, fontWeight: 600 }}
+              >
+                Free
+              </button>
             </div>
           </div>
 

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import {
   Queue, ArrowLeft, ArrowRight, Check, Stethoscope,
   Plus, Trash, Pill, Spinner, User, Clock, FirstAid,
-  NotePencil, Warning, Heart, Scales, X,
+  NotePencil, Warning, Heart, Scales, X, CheckCircle,
 } from '@phosphor-icons/react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -253,7 +253,44 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
       fetchQueue()
     }
     setActiveEntry(entry)
-    setPrescription({ diagnosis: '', notes: '', items: [] })
+    
+    // Check if it's a follow-up (prescription_id is present on entry)
+    if (entry.prescription_id) {
+      try {
+        // Fetch prescription items
+        const { data: items, error } = await supabase
+          .from('prescription_items')
+          .select('*')
+          .eq('prescription_id', entry.prescription_id)
+        
+        if (error) {
+          console.error('Failed to load previous prescription items:', error)
+          setPrescription({ diagnosis: '', notes: '', items: [] })
+        } else {
+          setPrescription({
+            // Note: We DO NOT set prescription.id here so that it submits as a NEW prescription
+            diagnosis: entry.prescriptions?.diagnosis || '',
+            notes: entry.prescriptions?.notes || '',
+            items: (items || []).map(item => ({
+              medicine_id: item.medicine_id || '',
+              medicine_name: item.medicine_name || '',
+              dosage: item.dosage || '',
+              frequency: item.frequency || '',
+              duration: item.duration || '',
+              quantity: item.quantity || 1,
+              instructions: item.instructions || '',
+            }))
+          })
+          toast.success('Follow-up patient: Previous prescription details loaded!')
+        }
+      } catch (err) {
+        console.error('Error fetching follow-up details:', err)
+        setPrescription({ diagnosis: '', notes: '', items: [] })
+      }
+    } else {
+      setPrescription({ diagnosis: '', notes: '', items: [] })
+    }
+    
     setMedSuggestions(null)
     // Scroll to top smoothly
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -394,25 +431,21 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
 
   /* ── Submit ────────────────────────────────── */
   const submitPrescription = async () => {
-    if (!prescription.diagnosis)
-      return toast.error('Diagnosis is required')
-    if (prescription.items.length === 0)
-      return toast.error('Add at least one medicine')
-    if (prescription.items.some(i => !i.medicine_name))
-      return toast.error('All medicines need names')
-
     setSubmitting(true)
     try {
       const doctorId = user?.doctor_id || user?.doctor?.id || activeEntry?.doctor_id
       let rxId = prescription.id
+
+      // Filter out empty items
+      const activeItems = (prescription.items || []).filter(item => item.medicine_name && item.medicine_name.trim())
 
       if (rxId) {
         // Edit flow
         const { error: rxError } = await supabase
           .from('prescriptions')
           .update({
-            diagnosis:   prescription.diagnosis,
-            notes:       prescription.notes,
+            diagnosis:   prescription.diagnosis || null,
+            notes:       prescription.notes || null,
             updated_at:  new Date().toISOString(),
           })
           .eq('id', rxId)
@@ -425,20 +458,22 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
           .eq('prescription_id', rxId)
         if (delError) throw delError
 
-        // Insert new items
-        const { error: insError } = await supabase.from('prescription_items').insert(
-          prescription.items.map(item => ({
-            prescription_id: rxId,
-            medicine_id:     item.medicine_id || null,
-            medicine_name:   item.medicine_name,
-            dosage:          item.dosage,
-            frequency:       item.frequency,
-            duration:        item.duration,
-            quantity:        item.quantity || 1,
-            instructions:    item.instructions,
-          }))
-        )
-        if (insError) throw insError
+        // Insert new items if there are any active items
+        if (activeItems.length > 0) {
+          const { error: insError } = await supabase.from('prescription_items').insert(
+            activeItems.map(item => ({
+              prescription_id: rxId,
+              medicine_id:     item.medicine_id || null,
+              medicine_name:   item.medicine_name.trim(),
+              dosage:          item.dosage || null,
+              frequency:       item.frequency || null,
+              duration:        item.duration || null,
+              quantity:        item.quantity || 1,
+              instructions:    item.instructions || null,
+            }))
+          )
+          if (insError) throw insError
+        }
 
         toast.success('✅ Prescription updated successfully!')
       } else {
@@ -446,8 +481,8 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
         const { data: rx, error } = await supabase.from('prescriptions').insert({
           patient_id:  activeEntry.patient_id,
           doctor_id:   doctorId,
-          diagnosis:   prescription.diagnosis,
-          notes:       prescription.notes,
+          diagnosis:   prescription.diagnosis || null,
+          notes:       prescription.notes || null,
           status:      'pending',
           visit_date:  new Date().toISOString(),
           expiry_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
@@ -455,18 +490,21 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
         if (error) throw error
         rxId = rx.id
 
-        await supabase.from('prescription_items').insert(
-          prescription.items.map(item => ({
-            prescription_id: rxId,
-            medicine_id:     item.medicine_id || null,
-            medicine_name:   item.medicine_name,
-            dosage:          item.dosage,
-            frequency:       item.frequency,
-            duration:        item.duration,
-            quantity:        item.quantity || 1,
-            instructions:    item.instructions,
-          }))
-        )
+        if (activeItems.length > 0) {
+          const { error: insError } = await supabase.from('prescription_items').insert(
+            activeItems.map(item => ({
+              prescription_id: rxId,
+              medicine_id:     item.medicine_id || null,
+              medicine_name:   item.medicine_name.trim(),
+              dosage:          item.dosage || null,
+              frequency:       item.frequency || null,
+              duration:        item.duration || null,
+              quantity:        item.quantity || 1,
+              instructions:    item.instructions || null,
+            }))
+          )
+          if (insError) throw insError
+        }
 
         await supabase.from('queue').update({
           status: 'completed',
@@ -595,6 +633,9 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
                           }}>NEXT</span>
                         )}
                         <span className="badge" style={{ background: s.bg, color: s.color }}>{s.label}</span>
+                        {entry.prescription_id && (
+                          <span className="badge badge-success">Follow-up</span>
+                        )}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 12.5, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
                         <span>{entry.patients?.phone}</span>
@@ -683,7 +724,7 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
               {prescription.id ? 'Edit Prescription' : 'Write Prescription'}
             </h2>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
-              Token #{activeEntry.token_number} · {format(new Date(), 'dd MMM yyyy, hh:mm a')}
+              Token #{activeEntry.token_number} {activeEntry.prescription_id && !prescription.id && '(Follow-up)'} · {format(new Date(), 'dd MMM yyyy, hh:mm a')}
             </p>
           </div>
         </div>
@@ -727,6 +768,26 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
               ? <><strong>Already Dispensed.</strong> This prescription has been dispensed. You can still edit and save corrections.</>
               : <><strong>At Pharmacy.</strong> This prescription is being processed at the pharmacy. Your edits will update the record immediately.</>
             }
+          </p>
+        </div>
+      )}
+
+      {/* Follow-up pre-fill notice banner */}
+      {activeEntry.prescription_id && !prescription.id && (
+        <div style={{
+          marginBottom: 20, padding: '12px 18px', borderRadius: 12,
+          background: 'rgba(16,185,129,0.07)',
+          border: '1px solid rgba(16,185,129,0.22)',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <CheckCircle
+            size={16}
+            color="#10b981"
+            weight="fill"
+            style={{ flexShrink: 0 }}
+          />
+          <p style={{ fontSize: 13, color: '#065f46', lineHeight: 1.5 }}>
+            <strong>Follow-up Visit.</strong> Previous prescription details (diagnosis, notes, and items) have been pre-filled for your convenience. You can modify or submit them as a new prescription.
           </p>
         </div>
       )}
@@ -796,7 +857,7 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
                 color: '#fff', fontSize: 11, fontWeight: 700,
                 padding: '3px 10px', borderRadius: 20,
               }}>
-                Token #{activeEntry.token_number}
+                Token #{activeEntry.token_number} {activeEntry.prescription_id && !prescription.id && '(Follow-up)'}
               </div>
             </div>
 
@@ -967,7 +1028,6 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
                   }}
                   onBlur={() => setTimeout(() => setDiagnosisSuggestions(null), 200)}
                   style={{ fontSize: 14 }}
-                  required
                 />
                 
                 {/* Diagnosis suggestions dropdown */}

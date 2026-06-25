@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import {
   Users, Queue, Pill, Stethoscope, CheckCircle, Warning,
-  ArrowUp, Heartbeat, TrendUp, ArrowRight, NotePencil
+  ArrowUp, Heartbeat, TrendUp, ArrowRight, NotePencil, WhatsappLogo
 } from '@phosphor-icons/react'
 import { format } from 'date-fns'
 
@@ -66,6 +66,24 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
       setRecentQueue(queue.slice(0, 15))
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
+  }
+
+  const handleSendWhatsApp = (entry) => {
+    if (!entry.patients) return
+    const phone = entry.patients.phone?.replace(/\D/g, '')
+    const dateStr = format(new Date(entry.created_at), 'dd MMM yyyy')
+    const feeStr = entry.fee === 0 ? 'Free' : `₹${entry.fee || 0}`
+    const msg = encodeURIComponent(
+      `*NEUROMAT CLINIC — TOKEN CONFIRMATION*\n\n` +
+      `Hello *${entry.patients.name}*,\n` +
+      `You have been registered successfully!\n\n` +
+      `🎫 *Token Number:* ${entry.token_number} ${entry.prescription_id ? '(Follow-up)' : ''}\n` +
+      `👨‍⚕️ *Doctor:* ${entry.doctors?.name || 'Assigned Doctor'}\n` +
+      `💵 *Fee:* ${feeStr}\n` +
+      `📅 *Date:* ${dateStr}\n\n` +
+      `Please wait for your turn. Thank you!`
+    )
+    window.open(`https://wa.me/${phone}?text=${msg}`, '_blank')
   }
 
   const STAT_CARDS = [
@@ -205,6 +223,7 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
                   <th>Patient</th>
                   <th>Doctor</th>
                   <th>Status</th>
+                  {['admin', 'reception'].includes(user?.role) && <th>Fee</th>}
                   <th>Time</th>
                   {user?.role === 'doctor' && <th>Action</th>}
                 </tr>
@@ -225,7 +244,21 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
                         </div>
                       </td>
                       <td>
-                        <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{q.patients?.name}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{q.patients?.name}</div>
+                          {q.prescription_id && (
+                            <span className="badge badge-success" style={{ fontSize: 10, padding: '1px 6px' }}>Follow-up</span>
+                          )}
+                          {['admin', 'reception'].includes(user?.role) && q.patients && (
+                            <button
+                              onClick={() => handleSendWhatsApp(q)}
+                              style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center', color: '#25D366' }}
+                              title="Send WhatsApp Token"
+                            >
+                              <WhatsappLogo size={14} weight="fill" />
+                            </button>
+                          )}
+                        </div>
                         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{q.patients?.phone}</div>
                       </td>
                       <td>
@@ -235,6 +268,11 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
                       <td>
                         <span className="badge" style={{ background: s.bg, color: s.color }}>{s.label}</span>
                       </td>
+                      {['admin', 'reception'].includes(user?.role) && (
+                        <td style={{ fontSize: 13, fontWeight: 600, color: q.fee === 0 ? 'var(--success)' : 'var(--text-secondary)' }}>
+                          {q.fee === 0 ? 'Free' : `₹${q.fee || 0}`}
+                        </td>
+                      )}
                       <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                         {period === 'daily' 
                           ? format(new Date(q.created_at), 'hh:mm a')

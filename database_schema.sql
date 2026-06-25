@@ -13,14 +13,15 @@ CREATE TABLE IF NOT EXISTS doctors (
   specialty text NOT NULL,
   email text UNIQUE,
   phone text,
+  default_fee integer DEFAULT 0,
   is_active boolean DEFAULT true,
   created_at timestamptz DEFAULT now()
 );
 
 -- Insert the two doctors
-INSERT INTO doctors (name, specialty) VALUES 
-  ('Dr. Mohd. Shakir', 'Neurosurgeon'),
-  ('Dr. Afifa', 'Gynecologist')
+INSERT INTO doctors (name, specialty, default_fee) VALUES 
+  ('Dr. Mohd. Shakir', 'Neurosurgeon', 500),
+  ('Dr. Afifa', 'Gynecologist', 300)
 ON CONFLICT DO NOTHING;
 
 -- Medicines/Inventory table
@@ -92,6 +93,7 @@ CREATE TABLE IF NOT EXISTS queue (
   prescription_id uuid REFERENCES prescriptions(id),
   token_number integer,
   status text DEFAULT 'waiting' CHECK (status IN ('waiting', 'with_doctor', 'completed', 'dispensing', 'done')),
+  fee integer DEFAULT 0,
   visit_date date DEFAULT current_date,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()

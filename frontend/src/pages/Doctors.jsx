@@ -11,7 +11,7 @@ export default function Doctors() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState(null)
-  const [form, setForm] = useState({ name: '', specialty: '', email: '', phone: '' })
+  const [form, setForm] = useState({ name: '', specialty: '', email: '', phone: '', default_fee: '' })
   const [saving, setSaving] = useState(false)
   const [staffForms, setStaffForms] = useState({ email: '', password: '' })
   const [addingStaff, setAddingStaff] = useState(false)
@@ -33,14 +33,20 @@ export default function Doctors() {
 
   const openAdd = () => {
     setEditing(null)
-    setForm({ name: '', specialty: '', email: '', phone: '' })
+    setForm({ name: '', specialty: '', email: '', phone: '', default_fee: '' })
     setStaffForms({ email: '', password: '' })
     setShowModal(true)
   }
 
   const openEdit = (doc) => {
     setEditing(doc)
-    setForm({ name: doc.name, specialty: doc.specialty, email: doc.email || '', phone: doc.phone || '' })
+    setForm({
+      name: doc.name,
+      specialty: doc.specialty,
+      email: doc.email || '',
+      phone: doc.phone || '',
+      default_fee: doc.default_fee !== undefined && doc.default_fee !== null ? doc.default_fee.toString() : ''
+    })
     setStaffForms({ email: '', password: '' })
     setShowModal(true)
   }
@@ -48,15 +54,24 @@ export default function Doctors() {
   const handleSave = async () => {
     if (!form.name || !form.specialty) return toast.error('Name and specialty are required')
     setSaving(true)
+    
+    const payload = {
+      name: form.name,
+      specialty: form.specialty,
+      email: form.email || null,
+      phone: form.phone || null,
+      default_fee: form.default_fee ? parseInt(form.default_fee) : 0
+    }
+
     try {
       if (editing) {
-        const { error } = await supabase.from('doctors').update(form).eq('id', editing.id)
+        const { error } = await supabase.from('doctors').update(payload).eq('id', editing.id)
         if (error) throw error
         toast.success('Doctor updated!')
       } else {
         // Create doctor
         const { data: doc, error } = await supabase.from('doctors').insert({
-          ...form, is_active: true
+          ...payload, is_active: true
         }).select().single()
         if (error) throw error
 
@@ -121,6 +136,7 @@ export default function Doctors() {
                   </div>
                   <p style={{ fontSize: 13, color: 'var(--primary-light)', marginBottom: 10 }}>{doc.specialty}</p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)' }}><Stethoscope size={12} /> Default Fee: ₹{doc.default_fee || 0}</div>
                     {doc.email && <div style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)' }}><EnvelopeSimple size={12} /> {doc.email}</div>}
                     {doc.phone && <div style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)' }}><Phone size={12} /> {doc.phone}</div>}
                     {doc.staff?.length > 0 && <div style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--success)' }}><UserCircle size={12} /> Account: {doc.staff[0]?.email}</div>}
@@ -176,6 +192,18 @@ export default function Doctors() {
                   <input type="tel" className="input" placeholder="Phone number"
                     value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
                 </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>DEFAULT FEE (₹)</label>
+                <input
+                  id="doctor-fee-input"
+                  type="number"
+                  className="input"
+                  placeholder="e.g. 500"
+                  value={form.default_fee}
+                  onChange={e => setForm(f => ({ ...f, default_fee: e.target.value }))}
+                />
               </div>
 
               {!editing && (

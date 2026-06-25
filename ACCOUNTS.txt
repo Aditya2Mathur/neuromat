@@ -7,4 +7,4 @@ Admin         | admin@neuromat.com       | admin 123
 Reception     | reception@neuromat.com   | reception123
 Doctor        | shakir@neuromat.com      | doctor123
 Doctor        | afifa@neuromat.com       | doctor123
-Medical Store | store@neuromat.com       | store123
+Medical Store | store@neuromat.com       | store 123
