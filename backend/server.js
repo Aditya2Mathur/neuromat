@@ -103,11 +103,11 @@ app.get('/api/queue/today', authMiddleware, async (req, res) => {
 // POST /api/prescriptions
 app.post('/api/prescriptions', authMiddleware, async (req, res) => {
   if (req.user.role !== 'doctor') return res.status(403).json({ error: 'Doctors only' })
-  const { queue_id, patient_id, doctor_id, diagnosis, notes, items } = req.body
+  const { queue_id, patient_id, doctor_id, diagnosis, notes, other_instruction, items } = req.body
 
   try {
     const { data: rx, error } = await supabase.from('prescriptions').insert({
-      patient_id, doctor_id, diagnosis, notes,
+      patient_id, doctor_id, diagnosis, notes, other_instruction,
       status: 'pending',
       visit_date: new Date().toISOString(),
       expiry_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),

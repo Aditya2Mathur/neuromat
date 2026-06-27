@@ -339,6 +339,11 @@ export default function Patients() {
                       <p className="text-xs font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>
                         Diagnosis: <span style={{ color: 'var(--text-secondary)' }}>{visit.prescriptions.diagnosis || '—'}</span>
                       </p>
+                      {visit.prescriptions.other_instruction && (
+                        <p className="text-xs font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>
+                          Other Inst: <span style={{ color: 'var(--text-secondary)' }}>{visit.prescriptions.other_instruction}</span>
+                        </p>
+                      )}
                       {visit.prescriptions.prescription_items?.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 mt-1.5">
                           {visit.prescriptions.prescription_items.map(item => (

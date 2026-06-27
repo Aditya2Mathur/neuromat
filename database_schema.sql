@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS prescriptions (
   expiry_date timestamptz DEFAULT (now() + interval '5 days'),
   diagnosis text,
   notes text,
+  other_instruction text,
   status text DEFAULT 'pending' CHECK (status IN ('pending', 'dispensed', 'cancelled')),
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()

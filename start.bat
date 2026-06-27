@@ -7,8 +7,8 @@ echo.
 echo  Starting frontend and backend servers...
 echo.
 
-start cmd /k "cd /d E:\FinalClinicManagement_System\frontend && npm run dev"
-timeout /t 2 /nobreak > nul
+start cmd /k "cd /d E:\FinalClinicManagement_System\frontend && npm.cmd run dev"
+ping 127.0.0.1 -n 3 > nul
 start cmd /k "cd /d E:\FinalClinicManagement_System\backend && node server.js"
 
 echo.

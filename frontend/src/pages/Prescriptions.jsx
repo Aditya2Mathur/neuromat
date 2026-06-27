@@ -21,6 +21,7 @@ export default function Prescriptions() {
   const [editing, setEditing] = useState(null)
   const [editDiagnosis, setEditDiagnosis] = useState('')
   const [editNotes, setEditNotes] = useState('')
+  const [editOtherInstruction, setEditOtherInstruction] = useState('')
   const [editItems, setEditItems] = useState([])
   const [medicines, setMedicines] = useState([])
   const [medSuggestions, setMedSuggestions] = useState(null) // {idx, list}
@@ -41,6 +42,7 @@ export default function Prescriptions() {
     setEditing(rx)
     setEditDiagnosis(rx.diagnosis || '')
     setEditNotes(rx.notes || '')
+    setEditOtherInstruction(rx.other_instruction || '')
     setEditItems((rx.prescription_items || []).map(item => ({
       medicine_id: item.medicine_id || '',
       medicine_name: item.medicine_name || '',
@@ -169,6 +171,7 @@ export default function Prescriptions() {
         .update({
           diagnosis: editDiagnosis,
           notes: editNotes,
+          other_instruction: editOtherInstruction || null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', editing.id)
@@ -368,6 +371,12 @@ export default function Prescriptions() {
                     <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>{selected.notes}</div>
                   </div>
                 )}
+                {selected.other_instruction && (
+                  <div className="mt-2">
+                    <div className="text-xs font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>OTHER INSTRUCTION</div>
+                    <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>{selected.other_instruction}</div>
+                  </div>
+                )}
               </div>
               <div>
                 <div className="text-xs font-semibold mb-2" style={{ color: 'var(--text-muted)' }}>MEDICINES</div>
@@ -443,6 +452,17 @@ export default function Prescriptions() {
                   value={editNotes}
                   onChange={e => setEditNotes(e.target.value)}
                   style={{ minHeight: 80 }}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>Other Instruction (Optional)</label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="Any other special instructions..."
+                  value={editOtherInstruction}
+                  onChange={e => setEditOtherInstruction(e.target.value)}
                 />
               </div>
 

@@ -35,7 +35,7 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
 
   /* Prescription workspace state */
   const [activeEntry,  setActiveEntry] = useState(null)   // patient being prescribed
-  const [prescription, setPrescription] = useState({ diagnosis: '', notes: '', items: [] })
+  const [prescription, setPrescription] = useState({ diagnosis: '', notes: '', other_instruction: '', items: [] })
   const [submitting,   setSubmitting]  = useState(false)
   const [medSearch,    setMedSearch]   = useState('')
   const [medicines,    setMedicines]   = useState([])
@@ -48,10 +48,11 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
   const [savingPatient, setSavingPatient] = useState(false)
 
   /* Historical suggestions states */
-  const [suggestionsDb, setSuggestionsDb] = useState({ diagnoses: [], notesLines: [], instructions: [] })
+  const [suggestionsDb, setSuggestionsDb] = useState({ diagnoses: [], notesLines: [], instructions: [], otherInstructions: [], pastMeds: {} })
   const [diagnosisSuggestions, setDiagnosisSuggestions] = useState(null)
   const [notesSuggestions, setNotesSuggestions] = useState(null)
   const [instSuggestions, setInstSuggestions] = useState(null)
+  const [otherInstSuggestions, setOtherInstSuggestions] = useState(null)
 
   /* ── Data fetching ──────────────────────────── */
   useEffect(() => {
@@ -102,19 +103,21 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
     try {
       const { data: rxData } = await supabase
         .from('prescriptions')
-        .select('diagnosis, notes')
+        .select('diagnosis, notes, other_instruction')
         .order('created_at', { ascending: false })
         .limit(1000)
 
       const { data: itemData } = await supabase
         .from('prescription_items')
-        .select('instructions')
+        .select('medicine_name, dosage, frequency, duration, instructions')
         .order('id', { ascending: false })
         .limit(2000)
 
       const diagnoses = new Set()
       const notesLines = new Set()
       const instructions = new Set()
+      const otherInstructions = new Set()
+      const pastMedsMap = {}
 
       rxData?.forEach(r => {
         if (r.diagnosis?.trim()) diagnoses.add(r.diagnosis.trim())
@@ -124,16 +127,41 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
             if (trimmed.length >= 2) notesLines.add(trimmed)
           })
         }
+        if (r.other_instruction?.trim()) {
+          otherInstructions.add(r.other_instruction.trim())
+        }
       })
 
       itemData?.forEach(item => {
         if (item.instructions?.trim()) instructions.add(item.instructions.trim())
+        if (item.medicine_name?.trim()) {
+          const medKey = item.medicine_name.trim().toLowerCase()
+          if (!pastMedsMap[medKey]) {
+            pastMedsMap[medKey] = []
+          }
+          const exists = pastMedsMap[medKey].some(
+            x => x.dosage === item.dosage &&
+                 x.frequency === item.frequency &&
+                 x.duration === item.duration &&
+                 x.instructions === item.instructions
+          )
+          if (!exists) {
+            pastMedsMap[medKey].push({
+              dosage: item.dosage || '',
+              frequency: item.frequency || '',
+              duration: item.duration || '',
+              instructions: item.instructions || ''
+            })
+          }
+        }
       })
 
       setSuggestionsDb({
         diagnoses: Array.from(diagnoses),
         notesLines: Array.from(notesLines),
-        instructions: Array.from(instructions)
+        instructions: Array.from(instructions),
+        otherInstructions: Array.from(otherInstructions),
+        pastMeds: pastMedsMap
       })
     } catch (err) {
       console.error('Error loading suggestions db:', err)
@@ -243,6 +271,20 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
     }
   }
 
+  const handleOtherInstChange = (e) => {
+    const val = e.target.value
+    setPrescription(p => ({ ...p, other_instruction: val }))
+    if (val.trim().length >= 2) {
+      const query = val.trim().toLowerCase()
+      const matches = (suggestionsDb.otherInstructions || [])
+        .filter(ins => ins.toLowerCase().includes(query))
+        .slice(0, 8)
+      setOtherInstSuggestions(matches)
+    } else {
+      setOtherInstSuggestions(null)
+    }
+  }
+
   /* ── Open prescription workspace ─────────────── */
   const openPrescribe = async (entry) => {
     // If waiting → call patient (status update)
@@ -265,12 +307,13 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
         
         if (error) {
           console.error('Failed to load previous prescription items:', error)
-          setPrescription({ diagnosis: '', notes: '', items: [] })
+          setPrescription({ diagnosis: '', notes: '', other_instruction: '', items: [] })
         } else {
           setPrescription({
             // Note: We DO NOT set prescription.id here so that it submits as a NEW prescription
             diagnosis: entry.prescriptions?.diagnosis || '',
             notes: entry.prescriptions?.notes || '',
+            other_instruction: entry.prescriptions?.other_instruction || '',
             items: (items || []).map(item => ({
               medicine_id: item.medicine_id || '',
               medicine_name: item.medicine_name || '',
@@ -285,10 +328,10 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
         }
       } catch (err) {
         console.error('Error fetching follow-up details:', err)
-        setPrescription({ diagnosis: '', notes: '', items: [] })
+        setPrescription({ diagnosis: '', notes: '', other_instruction: '', items: [] })
       }
     } else {
-      setPrescription({ diagnosis: '', notes: '', items: [] })
+      setPrescription({ diagnosis: '', notes: '', other_instruction: '', items: [] })
     }
     
     setMedSuggestions(null)
@@ -321,6 +364,7 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
       id: entry.prescription_id,
       diagnosis: entry.prescriptions?.diagnosis || '',
       notes: entry.prescriptions?.notes || '',
+      other_instruction: entry.prescriptions?.other_instruction || '',
       items: items || []
     })
     setMedSuggestions(null)
@@ -329,8 +373,9 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
 
   const closePrescribe = () => {
     setActiveEntry(null)
-    setPrescription({ diagnosis: '', notes: '', items: [] })
+    setPrescription({ diagnosis: '', notes: '', other_instruction: '', items: [] })
     setMedSuggestions(null)
+    setOtherInstSuggestions(null)
     fetchQueue()
   }
 
@@ -446,6 +491,7 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
           .update({
             diagnosis:   prescription.diagnosis || null,
             notes:       prescription.notes || null,
+            other_instruction: prescription.other_instruction || null,
             updated_at:  new Date().toISOString(),
           })
           .eq('id', rxId)
@@ -483,6 +529,7 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
           doctor_id:   doctorId,
           diagnosis:   prescription.diagnosis || null,
           notes:       prescription.notes || null,
+          other_instruction: prescription.other_instruction || null,
           status:      'pending',
           visit_date:  new Date().toISOString(),
           expiry_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
@@ -985,6 +1032,48 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
                   </div>
                 )}
               </div>
+
+              <div style={fld}>
+                <label style={lbl}>Other Instruction (Optional)</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder="Any other special instructions..."
+                    value={prescription.other_instruction || ''}
+                    onChange={handleOtherInstChange}
+                    onBlur={() => setTimeout(() => setOtherInstSuggestions(null), 200)}
+                    style={{ fontSize: 14 }}
+                  />
+                  {otherInstSuggestions && otherInstSuggestions.length > 0 && (
+                    <div className="glass" style={{
+                      position: 'absolute', top: '100%', marginTop: 4, left: 0, right: 0,
+                      zIndex: 150, borderRadius: 12, overflow: 'hidden', boxShadow: 'var(--shadow-lg)',
+                    }}>
+                      {otherInstSuggestions.map((s, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          style={{
+                            width: '100%', textAlign: 'left', padding: '10px 16px', fontSize: 14,
+                            color: 'var(--text-primary)', borderBottom: '1px solid var(--border)',
+                            background: 'var(--bg-card)', border: 'none', cursor: 'pointer', display: 'block',
+                            fontFamily: 'inherit',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(79,70,229,0.06)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-card)'}
+                          onMouseDown={() => {
+                            setPrescription(p => ({ ...p, other_instruction: s }))
+                            setOtherInstSuggestions(null)
+                          }}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1251,6 +1340,56 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
                               onChange={e => updateItem(idx, 'quantity', parseInt(e.target.value) || 1)} />
                           </div>
                         </div>
+
+                        {/* Past medicine prescriptions suggestions */}
+                        {item.medicine_name && suggestionsDb.pastMeds?.[item.medicine_name.trim().toLowerCase()]?.length > 0 && (
+                          <div style={{ marginBottom: 14 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                              Suggested Combinations:
+                            </span>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                              {suggestionsDb.pastMeds[item.medicine_name.trim().toLowerCase()].slice(0, 4).map((sug, sIdx) => (
+                                <button
+                                  key={sIdx}
+                                  type="button"
+                                  onClick={() => {
+                                    updateItem(idx, 'dosage', sug.dosage)
+                                    updateItem(idx, 'frequency', sug.frequency)
+                                    updateItem(idx, 'duration', sug.duration)
+                                    updateItem(idx, 'instructions', sug.instructions)
+                                    // Calculate quantity
+                                    const dailyCount = parseFrequency(sug.frequency)
+                                    const days = parseDurationDays(sug.duration)
+                                    updateItem(idx, 'quantity', dailyCount * days)
+                                  }}
+                                  className="tag"
+                                  style={{
+                                    padding: '4px 8px',
+                                    fontSize: '11px',
+                                    borderRadius: '8px',
+                                    background: 'rgba(99,102,241,0.06)',
+                                    border: '1px solid rgba(99,102,241,0.15)',
+                                    color: 'var(--text-primary)',
+                                    cursor: 'pointer',
+                                    fontWeight: 500,
+                                    fontFamily: 'inherit',
+                                    transition: 'all 0.15s'
+                                  }}
+                                  onMouseEnter={e => {
+                                    e.currentTarget.style.background = 'rgba(99,102,241,0.12)'
+                                    e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'
+                                  }}
+                                  onMouseLeave={e => {
+                                    e.currentTarget.style.background = 'rgba(99,102,241,0.06)'
+                                    e.currentTarget.style.borderColor = 'rgba(99,102,241,0.15)'
+                                  }}
+                                >
+                                  {sug.dosage || 'No Dose'} · {sug.frequency || 'No Freq'} · {sug.duration || 'No Dur'} {sug.instructions ? `(${sug.instructions})` : ''}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Instructions */}
                         <div style={{ ...fld, position: 'relative' }}>

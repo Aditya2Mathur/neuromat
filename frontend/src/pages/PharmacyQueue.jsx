@@ -539,6 +539,22 @@ export default function PharmacyQueue() {
                   </div>
                 </div>
               )}
+
+              {/* Other Instruction */}
+              {prescription?.other_instruction && (
+                <div>
+                  <div className="print-compact-header" style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8 }}>
+                    Other Instruction
+                  </div>
+                  <div className="print-compact-box" style={{
+                    padding: '12px 16px', borderRadius: 10,
+                    background: 'var(--bg-surface)', border: '1px solid var(--border)',
+                    fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.6,
+                  }}>
+                    {prescription.other_instruction}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
