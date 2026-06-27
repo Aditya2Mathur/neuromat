@@ -171,7 +171,7 @@ export default function Patients() {
   }
 
   return (
-    <div style={{ maxWidth: 960, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
         <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>Patients</h2>
         <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 4 }}>
