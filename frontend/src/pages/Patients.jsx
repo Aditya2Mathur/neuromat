@@ -219,7 +219,7 @@ export default function Patients() {
         </div>
       </div>
 
-      <div className="card" style={{ overflow: 'hidden' }}>
+      <div className="card" style={{ overflowX: 'auto' }}>
         {loading ? (
           <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[...Array(5)].map((_, i) => <div key={i} className="skeleton" style={{ height: 48, borderRadius: 10 }} />)}
@@ -237,7 +237,7 @@ export default function Patients() {
                 <th>Phone</th>
                 <th>Age/Gender</th>
                 <th>Last Visit</th>
-                <th>Action</th>
+                <th style={{ width: '270px', minWidth: '270px' }}>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -266,7 +266,7 @@ export default function Patients() {
                   <td className="text-sm" style={{ color: 'var(--text-muted)' }}>
                     {format(new Date(p.updated_at), 'dd MMM yyyy')}
                   </td>
-                  <td>
+                  <td style={{ width: '270px', minWidth: '270px' }}>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button
                         onClick={() => viewPatient(p)}
