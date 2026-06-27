@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import {
   Users, Queue, Pill, Stethoscope, CheckCircle, Warning,
-  ArrowUp, Heartbeat, TrendUp, ArrowRight, NotePencil, WhatsappLogo
+  ArrowUp, Heartbeat, TrendUp, ArrowRight, NotePencil, WhatsappLogo,
+  CurrencyInr
 } from '@phosphor-icons/react'
 import { format } from 'date-fns'
 
@@ -21,6 +22,7 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
   const [stats, setStats] = useState({
     todayPatients: 0, pendingQueue: 0, doctors: 0,
     medicines: 0, lowStock: 0, completedToday: 0,
+    moneyCollected: 0,
   })
   const [recentQueue, setRecentQueue] = useState([])
   const [loading, setLoading] = useState(true)
@@ -55,6 +57,12 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
       ])
 
       const queue = queueRes.data || []
+      const docId = user?.doctor_id || user?.doctor?.id
+      const doctorFees = queue
+        .filter(item => item.doctor_id === docId)
+        .reduce((sum, item) => sum + (item.fee || 0), 0)
+      const totalFees = queue.reduce((sum, item) => sum + (item.fee || 0), 0)
+
       setStats({
         todayPatients:  queue.length,
         pendingQueue:   queue.filter(q => ['waiting','with_doctor'].includes(q.status)).length,
@@ -62,6 +70,7 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
         medicines:      medRes.data?.length || 0,
         lowStock:       lowStockRes.data?.length || 0,
         completedToday: queue.filter(q => q.status === 'done').length,
+        moneyCollected: user?.role === 'doctor' ? doctorFees : totalFees,
       })
       setRecentQueue(queue.slice(0, 15))
     } catch (e) { console.error(e) }
@@ -86,7 +95,18 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
     window.open(`https://wa.me/${phone}?text=${msg}`, '_blank')
   }
 
-  const STAT_CARDS = [
+  const STAT_CARDS = []
+  
+  if (['admin', 'reception', 'doctor'].includes(user?.role)) {
+    STAT_CARDS.push({
+      label: period === 'daily' ? "Daily Collection" : period === 'weekly' ? "Weekly Collection" : "Monthly Collection",
+      value: `₹${stats.moneyCollected.toLocaleString('en-IN')}`,
+      icon: CurrencyInr,
+      color: '#10b981', // green
+    })
+  }
+
+  STAT_CARDS.push(
     { 
       label: period === 'daily' ? "Today's Patients" : period === 'weekly' ? "Weekly Patients" : "Monthly Patients", 
       value: stats.todayPatients, 
@@ -99,17 +119,23 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
       value: stats.pendingQueue,  
       icon: Queue,        
       color: '#f59e0b' 
-    },
-    { label: 'Active Doctors',   value: stats.doctors,       icon: Stethoscope,  color: '#10b981' },
-    { label: 'Medicines',        value: stats.medicines,     icon: Pill,         color: '#06b6d4' },
-    { label: 'Low Stock Items',  value: stats.lowStock,      icon: Warning,      color: '#ef4444', alert: stats.lowStock > 0 },
-    { 
-      label: period === 'daily' ? 'Completed Today' : period === 'weekly' ? 'Weekly Completed' : 'Monthly Completed',  
-      value: stats.completedToday,
-      icon: CheckCircle,  
-      color: '#8b5cf6' 
-    },
-  ]
+    }
+  )
+
+  if (user?.role === 'admin') {
+    STAT_CARDS.push(
+      { label: 'Active Doctors',   value: stats.doctors,       icon: Stethoscope,  color: '#10b981' },
+      { label: 'Medicines',        value: stats.medicines,     icon: Pill,         color: '#06b6d4' },
+      { label: 'Low Stock Items',  value: stats.lowStock,      icon: Warning,      color: '#ef4444', alert: stats.lowStock > 0 }
+    )
+  }
+
+  STAT_CARDS.push({ 
+    label: period === 'daily' ? 'Completed Today' : period === 'weekly' ? 'Weekly Completed' : 'Monthly Completed',  
+    value: stats.completedToday,
+    icon: CheckCircle,  
+    color: '#8b5cf6' 
+  })
 
   if (loading) return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
