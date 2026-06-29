@@ -38,10 +38,10 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
       let startDate = startOfToday
       if (period === 'weekly') {
         startDate = new Date(startOfToday)
-        startDate.setDate(startOfToday.getDate() - 6)
+        startDate.setDate(startOfToday.getDate() - 7)
       } else if (period === 'monthly') {
         startDate = new Date(startOfToday)
-        startDate.setDate(startOfToday.getDate() - 29)
+        startDate.setDate(startOfToday.getDate() - 30)
       }
       
       const startDateISO = startDate.toISOString()
@@ -249,7 +249,7 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
                   <th>Patient</th>
                   <th>Doctor</th>
                   <th>Status</th>
-                  {['admin', 'reception'].includes(user?.role) && <th>Fee</th>}
+                  {['admin', 'reception', 'doctor'].includes(user?.role) && <th>Fee</th>}
                   <th>Time</th>
                   {user?.role === 'doctor' && <th>Action</th>}
                 </tr>
@@ -294,7 +294,7 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
                       <td>
                         <span className="badge" style={{ background: s.bg, color: s.color }}>{s.label}</span>
                       </td>
-                      {['admin', 'reception'].includes(user?.role) && (
+                      {['admin', 'reception', 'doctor'].includes(user?.role) && (
                         <td style={{ fontSize: 13, fontWeight: 600, color: q.fee === 0 ? 'var(--success)' : 'var(--text-secondary)' }}>
                           {q.fee === 0 ? 'Free' : `₹${q.fee || 0}`}
                         </td>

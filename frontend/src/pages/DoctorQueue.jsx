@@ -32,6 +32,7 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
   const [queue,        setQueue]       = useState([])
   const [loading,      setLoading]     = useState(true)
   const [filter,       setFilter]      = useState('active')
+  const [timePeriod,   setTimePeriod]  = useState('daily') // 'daily', 'weekly', 'monthly'
 
   /* Prescription workspace state */
   const [activeEntry,  setActiveEntry] = useState(null)   // patient being prescribed
@@ -57,7 +58,7 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
   /* ── Data fetching ──────────────────────────── */
   useEffect(() => {
     fetchQueue()
-  }, [filter])
+  }, [filter, timePeriod])
 
   useEffect(() => {
     fetchMedicines()
@@ -66,23 +67,38 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
       .on('postgres_changes', { event: '*', schema: 'public', table: 'queue' }, fetchQueue)
       .subscribe()
     return () => supabase.removeChannel(sub)
-  }, [filter])
+  }, [filter, timePeriod])
 
   const fetchQueue = async () => {
     setLoading(true)
     try {
       const today = new Date()
       const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-      const startOfTodayISO = startOfToday.toISOString()
+      
+      let startDate = startOfToday
+      if (timePeriod === 'weekly') {
+        startDate = new Date(startOfToday)
+        startDate.setDate(startOfToday.getDate() - 7)
+      } else if (timePeriod === 'monthly') {
+        startDate = new Date(startOfToday)
+        startDate.setDate(startOfToday.getDate() - 30)
+      }
+      const startDateISO = startDate.toISOString()
 
       const statuses = filter === 'dispensed'
         ? ['dispensing', 'done']
         : ['waiting', 'with_doctor', 'completed']
       let q = supabase.from('queue')
         .select('*, patients(*), doctors(*), prescriptions(*)')
-        .gte('created_at', startOfTodayISO)
+        .gte('created_at', startDateISO)
         .in('status', statuses)
-        .order('token_number', { ascending: true })
+
+      if (timePeriod === 'daily') {
+        q = q.order('token_number', { ascending: true })
+      } else {
+        q = q.order('created_at', { ascending: false })
+      }
+
       if (user?.role === 'doctor' && user?.doctor_id)
         q = q.eq('doctor_id', user.doctor_id)
       else if (user?.role === 'doctor' && user?.doctor?.id)
@@ -597,22 +613,48 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
           <button onClick={fetchQueue} className="btn btn-sm btn-secondary">Refresh</button>
         </div>
 
-        {/* Filter Tabs */}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            id="filter-active"
-            onClick={() => setFilter('active')}
-            className={`btn btn-sm ${filter === 'active' ? 'btn-primary' : 'btn-secondary'}`}
-          >
-            Active Patients
-          </button>
-          <button
-            id="filter-dispensed-rx"
-            onClick={() => setFilter('dispensed')}
-            className={`btn btn-sm ${filter === 'dispensed' ? 'btn-primary' : 'btn-secondary'}`}
-          >
-            Dispensed Prescriptions
-          </button>
+        {/* Filter Controls (Status + Time Period) */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              id="filter-active"
+              onClick={() => setFilter('active')}
+              className={`btn btn-sm ${filter === 'active' ? 'btn-primary' : 'btn-secondary'}`}
+            >
+              Active Patients
+            </button>
+            <button
+              id="filter-dispensed-rx"
+              onClick={() => setFilter('dispensed')}
+              className={`btn btn-sm ${filter === 'dispensed' ? 'btn-primary' : 'btn-secondary'}`}
+            >
+              Dispensed Prescriptions
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: 4, background: 'var(--bg-card)', padding: 4, borderRadius: 10, border: '1px solid var(--border)' }}>
+            {['daily', 'weekly', 'monthly'].map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setTimePeriod(p)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  textTransform: 'capitalize',
+                  border: 'none',
+                  background: timePeriod === p ? 'var(--primary)' : 'transparent',
+                  color: timePeriod === p ? '#fff' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Queue cards */}
@@ -692,8 +734,11 @@ export default function DoctorQueue({ selectedQueueItem, clearSelectedQueueItem 
                         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                           <Stethoscope size={12} /> {entry.doctors?.name}
                         </span>
+                        <span style={{ fontWeight: 600, color: entry.fee === 0 ? 'var(--success)' : 'var(--text-secondary)' }}>
+                          Fee: {entry.fee === 0 ? 'Free' : `₹${entry.fee || 0}`}
+                        </span>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Clock size={12} /> {format(new Date(entry.created_at), 'hh:mm a')}
+                          <Clock size={12} /> {timePeriod === 'daily' ? format(new Date(entry.created_at), 'hh:mm a') : format(new Date(entry.created_at), 'dd MMM, hh:mm a')}
                         </span>
                       </div>
                     </div>

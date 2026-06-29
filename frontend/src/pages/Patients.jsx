@@ -46,11 +46,11 @@ export default function Patients() {
       return patientDate >= startOfToday
     } else if (period === 'weekly') {
       const sevenDaysAgo = new Date(startOfToday)
-      sevenDaysAgo.setDate(startOfToday.getDate() - 6)
+      sevenDaysAgo.setDate(startOfToday.getDate() - 7)
       return patientDate >= sevenDaysAgo
     } else if (period === 'monthly') {
       const thirtyDaysAgo = new Date(startOfToday)
-      thirtyDaysAgo.setDate(startOfToday.getDate() - 29)
+      thirtyDaysAgo.setDate(startOfToday.getDate() - 30)
       return patientDate >= thirtyDaysAgo
     }
 

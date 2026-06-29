@@ -24,31 +24,53 @@ export default function PharmacyQueue() {
   const [prescription,  setPrescription] = useState(null)
   const [dispensing,    setDispensing]   = useState(false)
   const [filter,        setFilter]       = useState('pending')
+  const [timePeriod,    setTimePeriod]   = useState('daily') // 'daily', 'weekly', 'monthly'
   const printRef = useRef()
 
   /* ── Realtime + initial load ──────────────────── */
   useEffect(() => {
     fetchQueue()
-  }, [filter])
+  }, [filter, timePeriod])
 
   useEffect(() => {
     const sub = supabase.channel('pharmacy-queue')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'queue' }, fetchQueue)
       .subscribe()
     return () => supabase.removeChannel(sub)
-  }, [filter])
+  }, [filter, timePeriod])
 
   const fetchQueue = async () => {
     setLoading(true)
     try {
-      const today = format(new Date(), 'yyyy-MM-dd')
+      const today = new Date()
+      const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+      
+      let startDate = startOfToday
+      if (timePeriod === 'weekly') {
+        startDate = new Date(startOfToday)
+        startDate.setDate(startOfToday.getDate() - 7)
+      } else if (timePeriod === 'monthly') {
+        startDate = new Date(startOfToday)
+        startDate.setDate(startOfToday.getDate() - 30)
+      }
+
+      const startDateStr = format(startDate, 'yyyy-MM-dd')
       const statuses = filter === 'dispensed' ? ['done'] : ['completed', 'dispensing']
-      const { data } = await supabase
+
+      let q = supabase
         .from('queue')
         .select('*, patients(*), doctors(*), prescriptions(*, prescription_items(*))')
-        .eq('visit_date', today)
         .in('status', statuses)
-        .order('token_number', { ascending: true })
+
+      if (timePeriod === 'daily') {
+        q = q.eq('visit_date', startDateStr).order('token_number', { ascending: true })
+      } else {
+        q = q.gte('visit_date', startDateStr)
+             .order('visit_date', { ascending: false })
+             .order('token_number', { ascending: true })
+      }
+
+      const { data } = await q
       setQueue(data || [])
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
@@ -157,22 +179,48 @@ export default function PharmacyQueue() {
           <button onClick={fetchQueue} className="btn btn-sm btn-secondary">Refresh</button>
         </div>
 
-        {/* Filter Tabs */}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            id="filter-pending"
-            onClick={() => setFilter('pending')}
-            className={`btn btn-sm ${filter === 'pending' ? 'btn-primary' : 'btn-secondary'}`}
-          >
-            Pending Prescriptions
-          </button>
-          <button
-            id="filter-dispensed"
-            onClick={() => setFilter('dispensed')}
-            className={`btn btn-sm ${filter === 'dispensed' ? 'btn-primary' : 'btn-secondary'}`}
-          >
-            Dispensed Prescriptions
-          </button>
+        {/* Filter Controls (Status + Time Period) */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              id="filter-pending"
+              onClick={() => setFilter('pending')}
+              className={`btn btn-sm ${filter === 'pending' ? 'btn-primary' : 'btn-secondary'}`}
+            >
+              Pending Prescriptions
+            </button>
+            <button
+              id="filter-dispensed"
+              onClick={() => setFilter('dispensed')}
+              className={`btn btn-sm ${filter === 'dispensed' ? 'btn-primary' : 'btn-secondary'}`}
+            >
+              Dispensed Prescriptions
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: 4, background: 'var(--bg-card)', padding: 4, borderRadius: 10, border: '1px solid var(--border)' }}>
+            {['daily', 'weekly', 'monthly'].map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setTimePeriod(p)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  textTransform: 'capitalize',
+                  border: 'none',
+                  background: timePeriod === p ? 'var(--primary)' : 'transparent',
+                  color: timePeriod === p ? '#fff' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Queue cards */}
@@ -250,7 +298,7 @@ export default function PharmacyQueue() {
                           <FirstAid size={12} /> {entry.prescriptions?.diagnosis || 'No diagnosis noted'}
                         </span>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Clock size={12} /> {format(new Date(entry.created_at), 'hh:mm a')}
+                          <Clock size={12} /> {timePeriod === 'daily' ? format(new Date(entry.created_at), 'hh:mm a') : format(new Date(entry.created_at), 'dd MMM, hh:mm a')}
                         </span>
                       </div>
                     </div>
