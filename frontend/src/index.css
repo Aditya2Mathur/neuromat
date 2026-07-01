@@ -649,6 +649,7 @@ select.input {
     border-radius: 6px !important;
     background: transparent !important;
     border: 1px solid #ddd !important;
+    white-space: pre-wrap !important;
   }
 
   /* Compact table style adjustments for high-contrast print */

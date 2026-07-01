@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import { Users, Phone, MagnifyingGlass, Calendar, Stethoscope, X, NotePencil, Spinner, Trash } from '@phosphor-icons/react'
 import { format } from 'date-fns'
@@ -13,6 +14,8 @@ export default function Patients() {
   const [selected, setSelected] = useState(null)
   const [patientHistory, setPatientHistory] = useState([])
   const [period, setPeriod] = useState('all') // 'all', 'daily', 'weekly', 'monthly'
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 20
 
   /* Edit patient details states */
   const [showEditModal, setShowEditModal] = useState(false)
@@ -31,6 +34,10 @@ export default function Patients() {
     setPatients(data || [])
     setLoading(false)
   }
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [search, period])
 
   const filtered = patients.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.phone.includes(search)
@@ -170,6 +177,10 @@ export default function Patients() {
     }
   }
 
+  const totalPages = Math.ceil(filtered.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const paginatedPatients = filtered.slice(startIndex, startIndex + itemsPerPage)
+
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
@@ -219,7 +230,7 @@ export default function Patients() {
         </div>
       </div>
 
-      <div className="card" style={{ overflowX: 'auto' }}>
+      <div className="card" style={{ overflowX: 'auto', padding: '16px 20px' }}>
         {loading ? (
           <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[...Array(5)].map((_, i) => <div key={i} className="skeleton" style={{ height: 48, borderRadius: 10 }} />)}
@@ -230,6 +241,7 @@ export default function Patients() {
             <p className="empty-state-title">No patients found</p>
           </div>
         ) : (
+          <>
           <table className="table">
             <thead>
               <tr>
@@ -241,7 +253,7 @@ export default function Patients() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(p => (
+              {paginatedPatients.map(p => (
                 <tr key={p.id}>
                   <td>
                     <div className="flex items-center gap-3">
@@ -298,13 +310,51 @@ export default function Patients() {
               ))}
             </tbody>
           </table>
+
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)', flexWrap: 'wrap', gap: 12 }}>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filtered.length)} of {filtered.length} patients
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-sm btn-secondary"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </button>
+                {[...Array(totalPages)].map((_, i) => {
+                  const pageNum = i + 1
+                  return (
+                    <button
+                      key={pageNum}
+                      className={`btn btn-sm ${currentPage === pageNum ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => setCurrentPage(pageNum)}
+                      style={{ minWidth: 32, padding: '4px 8px' }}
+                    >
+                      {pageNum}
+                    </button>
+                  )
+                })}
+                <button
+                  className="btn btn-sm btn-secondary"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+          </>
         )}
       </div>
 
       {/* Patient History Modal */}
-      {selected && (
-        <div className="modal-overlay">
-          <div className="modal modal-lg">
+      {selected && createPortal(
+        <div className="modal-overlay" onClick={() => setSelected(null)}>
+          <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 22, paddingBottom: 18, borderBottom: '1px solid var(--border)' }}>
               <div>
                 <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>{selected.name}</h3>
@@ -337,11 +387,11 @@ export default function Patients() {
                   {visit.prescriptions && (
                     <div className="mt-2 pt-2" style={{ borderTop: '1px solid var(--border)' }}>
                       <p className="text-xs font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>
-                        Diagnosis: <span style={{ color: 'var(--text-secondary)' }}>{visit.prescriptions.diagnosis || '—'}</span>
+                        Diagnosis: <span style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>{visit.prescriptions.diagnosis || '—'}</span>
                       </p>
                       {visit.prescriptions.other_instruction && (
                         <p className="text-xs font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>
-                          Other Inst: <span style={{ color: 'var(--text-secondary)' }}>{visit.prescriptions.other_instruction}</span>
+                          Other Inst: <span style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>{visit.prescriptions.other_instruction}</span>
                         </p>
                       )}
                       {visit.prescriptions.prescription_items?.length > 0 && (
@@ -357,13 +407,13 @@ export default function Patients() {
               ))}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-
-      {/* Edit Patient Modal */}
-      {showEditModal && editPatient && (
-        <div className="modal-overlay">
-          <div className="modal">
+        {/* Edit Patient Modal */}
+      {showEditModal && editPatient && createPortal(
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 22, paddingBottom: 18, borderBottom: '1px solid var(--border)' }}>
               <div>
                 <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>Edit Patient Details</h3>
@@ -466,7 +516,8 @@ export default function Patients() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

@@ -364,17 +364,17 @@ export default function Prescriptions() {
               </div>
               <div className="rounded-xl p-4" style={{ background: 'var(--bg-elevated)' }}>
                 <div className="text-xs font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>DIAGNOSIS</div>
-                <div>{selected.diagnosis || '—'}</div>
+                <div style={{ whiteSpace: 'pre-wrap' }}>{selected.diagnosis || '—'}</div>
                 {selected.notes && (
                   <div className="mt-2">
                     <div className="text-xs font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>NOTES</div>
-                    <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>{selected.notes}</div>
+                    <div className="text-sm" style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>{selected.notes}</div>
                   </div>
                 )}
                 {selected.other_instruction && (
                   <div className="mt-2">
                     <div className="text-xs font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>OTHER INSTRUCTION</div>
-                    <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>{selected.other_instruction}</div>
+                    <div className="text-sm" style={{ color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>{selected.other_instruction}</div>
                   </div>
                 )}
               </div>

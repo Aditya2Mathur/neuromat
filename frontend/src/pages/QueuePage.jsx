@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import { Queue, Clock, CheckCircle, ArrowClockwise, NotePencil, X, Spinner, WhatsappLogo } from '@phosphor-icons/react'
 import { format } from 'date-fns'
@@ -22,7 +23,8 @@ export default function QueuePage() {
   /* Edit patient details states */
   const [showEditModal, setShowEditModal] = useState(false)
   const [editPatient, setEditPatient] = useState(null)
-  const [editForm, setEditForm] = useState({ name: '', phone: '', age: '', gender: '', weight: '', address: '' })
+  const [editQueueItem, setEditQueueItem] = useState(null)
+  const [editForm, setEditForm] = useState({ name: '', phone: '', age: '', gender: '', weight: '', address: '', fee: '' })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -47,15 +49,17 @@ export default function QueuePage() {
     setLoading(false)
   }
 
-  const openEditModal = (p) => {
-    setEditPatient(p)
+  const openEditModal = (entry) => {
+    setEditPatient(entry.patients)
+    setEditQueueItem(entry)
     setEditForm({
-      name: p.name,
-      phone: p.phone,
-      age: p.age || '',
-      gender: p.gender || '',
-      weight: p.weight || '',
-      address: p.address || '',
+      name: entry.patients.name,
+      phone: entry.patients.phone,
+      age: entry.patients.age || '',
+      gender: entry.patients.gender || '',
+      weight: entry.patients.weight || '',
+      address: entry.patients.address || '',
+      fee: entry.fee !== undefined && entry.fee !== null ? entry.fee.toString() : '0',
     })
     setShowEditModal(true)
   }
@@ -66,7 +70,7 @@ export default function QueuePage() {
     if (!editForm.phone.trim()) return toast.error('Phone number is required')
     setSaving(true)
     try {
-      const { data, error } = await supabase
+      const { error: patientError } = await supabase
         .from('patients')
         .update({
           name: editForm.name.trim(),
@@ -78,13 +82,28 @@ export default function QueuePage() {
           updated_at: new Date().toISOString(),
         })
         .eq('id', editPatient.id)
-        .select()
-        .single()
 
-      if (error) throw error
+      if (patientError) throw patientError
+
+      if (editQueueItem) {
+        const parsedFee = editForm.fee !== '' ? parseInt(editForm.fee) : 0
+        if (isNaN(parsedFee)) {
+          throw new Error('Fee must be a valid number')
+        }
+        const { error: queueError } = await supabase
+          .from('queue')
+          .update({
+            fee: parsedFee,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', editQueueItem.id)
+
+        if (queueError) throw queueError
+      }
       
-      toast.success('Patient details updated successfully!')
+      toast.success('Patient details and fee updated successfully!')
       setShowEditModal(false)
+      setEditQueueItem(null)
       fetchQueue()
     } catch (err) {
       toast.error(err.message || 'Failed to update patient details')
@@ -241,20 +260,22 @@ export default function QueuePage() {
                       <button
                         id={`whatsapp-queue-patient-${entry.id}`}
                         onClick={() => handleSendWhatsApp(entry)}
-                        className="btn btn-icon btn-secondary btn-sm"
-                        style={{ padding: 6, color: '#25D366' }}
+                        className="btn btn-secondary btn-sm"
+                        style={{ color: '#25D366', display: 'inline-flex', alignItems: 'center', gap: 6 }}
                         title="Send WhatsApp Token"
                       >
                         <WhatsappLogo size={15} weight="fill" />
+                        <span>WhatsApp</span>
                       </button>
                       <button
                         id={`edit-queue-patient-${entry.id}`}
-                        onClick={() => openEditModal(entry.patients)}
-                        className="btn btn-icon btn-secondary btn-sm"
-                        style={{ padding: 6 }}
-                        title="Edit Patient"
+                        onClick={() => openEditModal(entry)}
+                        className="btn btn-secondary btn-sm"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        title="Edit Patient & Fee"
                       >
                         <NotePencil size={15} />
+                        <span>Edit</span>
                       </button>
                     </div>
                   )}
@@ -269,15 +290,15 @@ export default function QueuePage() {
       )}
 
       {/* Edit Patient Modal */}
-      {showEditModal && editPatient && (
-        <div className="modal-overlay">
-          <div className="modal">
+      {showEditModal && editPatient && createPortal(
+        <div className="modal-overlay" onClick={() => { setShowEditModal(false); setEditQueueItem(null); }}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 22, paddingBottom: 18, borderBottom: '1px solid var(--border)' }}>
               <div>
                 <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>Edit Patient Details</h3>
                 <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>Update registration details</p>
               </div>
-              <button onClick={() => setShowEditModal(false)} className="btn btn-icon btn-secondary btn-sm"><X size={14} /></button>
+              <button onClick={() => { setShowEditModal(false); setEditQueueItem(null); }} className="btn btn-icon btn-secondary btn-sm"><X size={14} /></button>
             </div>
 
             <form onSubmit={handleSavePatient} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -345,6 +366,19 @@ export default function QueuePage() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Registration Fee (₹) *</label>
+                <input
+                  id="queue-edit-fee"
+                  type="number"
+                  className="input"
+                  value={editForm.fee}
+                  onChange={e => setEditForm(f => ({ ...f, fee: e.target.value }))}
+                  min={0}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Address</label>
                 <textarea
                   className="input"
@@ -358,7 +392,7 @@ export default function QueuePage() {
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => setShowEditModal(false)}
+                  onClick={() => { setShowEditModal(false); setEditQueueItem(null); }}
                 >
                   Cancel
                 </button>
@@ -374,7 +408,8 @@ export default function QueuePage() {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

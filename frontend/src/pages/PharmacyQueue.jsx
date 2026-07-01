@@ -567,6 +567,7 @@ export default function PharmacyQueue() {
                   background: 'linear-gradient(135deg, rgba(99,102,241,0.06), rgba(139,92,246,0.04))',
                   border: '1px solid rgba(99,102,241,0.15)',
                   fontSize: 15, fontWeight: 600, color: 'var(--text-primary)',
+                  whiteSpace: 'pre-wrap',
                 }}>
                   {prescription?.diagnosis || '—'}
                 </div>
@@ -582,6 +583,7 @@ export default function PharmacyQueue() {
                     padding: '12px 16px', borderRadius: 10,
                     background: 'var(--bg-surface)', border: '1px solid var(--border)',
                     fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.6,
+                    whiteSpace: 'pre-wrap',
                   }}>
                     {prescription.notes}
                   </div>
@@ -598,6 +600,7 @@ export default function PharmacyQueue() {
                     padding: '12px 16px', borderRadius: 10,
                     background: 'var(--bg-surface)', border: '1px solid var(--border)',
                     fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.6,
+                    whiteSpace: 'pre-wrap',
                   }}>
                     {prescription.other_instruction}
                   </div>

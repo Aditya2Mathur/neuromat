@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import {
   Users, Queue, Pill, Stethoscope, CheckCircle, Warning,
   ArrowUp, Heartbeat, TrendUp, ArrowRight, NotePencil, WhatsappLogo,
-  CurrencyInr
+  CurrencyInr, X
 } from '@phosphor-icons/react'
 import { format } from 'date-fns'
 
@@ -25,6 +26,8 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
     moneyCollected: 0,
   })
   const [recentQueue, setRecentQueue] = useState([])
+  const [fullQueue, setFullQueue] = useState([])
+  const [selectedMetric, setSelectedMetric] = useState(null) // 'collections', 'patients', 'queue', 'completed'
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { fetchStats() }, [period])
@@ -72,6 +75,7 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
         completedToday: queue.filter(q => q.status === 'done').length,
         moneyCollected: user?.role === 'doctor' ? doctorFees : totalFees,
       })
+      setFullQueue(queue)
       setRecentQueue(queue.slice(0, 15))
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
@@ -95,10 +99,32 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
     window.open(`https://wa.me/${phone}?text=${msg}`, '_blank')
   }
 
+  const getMetricData = () => {
+    const docId = user?.doctor_id || user?.doctor?.id
+    let base = fullQueue
+    if (user?.role === 'doctor') {
+      base = base.filter(q => q.doctor_id === docId)
+    }
+    
+    switch (selectedMetric) {
+      case 'collections':
+        return base
+      case 'patients':
+        return base
+      case 'queue':
+        return base.filter(q => ['waiting', 'with_doctor'].includes(q.status))
+      case 'completed':
+        return base.filter(q => q.status === 'done')
+      default:
+        return []
+    }
+  }
+
   const STAT_CARDS = []
   
   if (['admin', 'reception', 'doctor'].includes(user?.role)) {
     STAT_CARDS.push({
+      type: 'collections',
       label: period === 'daily' ? "Daily Collection" : period === 'weekly' ? "Weekly Collection" : "Monthly Collection",
       value: `₹${stats.moneyCollected.toLocaleString('en-IN')}`,
       icon: CurrencyInr,
@@ -108,6 +134,7 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
 
   STAT_CARDS.push(
     { 
+      type: 'patients',
       label: period === 'daily' ? "Today's Patients" : period === 'weekly' ? "Weekly Patients" : "Monthly Patients", 
       value: stats.todayPatients, 
       icon: Users,        
@@ -115,6 +142,7 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
       trend: period === 'daily' 
     },
     { 
+      type: 'queue',
       label: period === 'daily' ? 'Pending Queue' : period === 'weekly' ? 'Weekly Pending' : 'Monthly Pending',    
       value: stats.pendingQueue,  
       icon: Queue,        
@@ -131,6 +159,7 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
   }
 
   STAT_CARDS.push({ 
+    type: 'completed',
     label: period === 'daily' ? 'Completed Today' : period === 'weekly' ? 'Weekly Completed' : 'Monthly Completed',  
     value: stats.completedToday,
     icon: CheckCircle,  
@@ -196,8 +225,29 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 16 }}>
         {STAT_CARDS.map((s, i) => {
           const Icon = s.icon
+          const isClickable = !!s.type
           return (
-            <div key={i} className="stat-card">
+            <div
+              key={i}
+              className="stat-card"
+              onClick={() => isClickable && setSelectedMetric(s.type)}
+              style={{
+                cursor: isClickable ? 'pointer' : 'default',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              }}
+              onMouseEnter={e => {
+                if (isClickable) {
+                  e.currentTarget.style.transform = 'translateY(-2px)'
+                  e.currentTarget.style.borderColor = s.color
+                }
+              }}
+              onMouseLeave={e => {
+                if (isClickable) {
+                  e.currentTarget.style.transform = ''
+                  e.currentTarget.style.borderColor = ''
+                }
+              }}
+            >
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 12, background: `${s.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Icon size={20} color={s.color} weight="fill" />
@@ -345,6 +395,93 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
           </div>
         )}
       </div>
+
+      {/* Metric details Modal */}
+      {selectedMetric && createPortal(
+        <div className="modal-overlay" onClick={() => setSelectedMetric(null)}>
+          <div className="modal modal-lg" onClick={e => e.stopPropagation()} style={{ maxWidth: 700 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 22, paddingBottom: 18, borderBottom: '1px solid var(--border)' }}>
+              <div>
+                <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {selectedMetric === 'collections' && 'Fee Collections Breakdown'}
+                  {selectedMetric === 'patients' && 'Registered Patients'}
+                  {selectedMetric === 'queue' && 'Pending Patient Queue'}
+                  {selectedMetric === 'completed' && 'Completed Patients'}
+                </h3>
+                <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
+                  {period === 'daily' ? "Today's details" : period === 'weekly' ? "This week's details" : "This month's details"}
+                </p>
+              </div>
+              <button onClick={() => setSelectedMetric(null)} className="btn btn-icon btn-secondary btn-sm"><X size={14} /></button>
+            </div>
+
+            <div style={{ maxHeight: '400px', overflowY: 'auto', paddingRight: 4 }}>
+              {getMetricData().length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)' }}>
+                  No records found
+                </div>
+              ) : (
+                <table className="table" style={{ width: '100%' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 60 }}>Token</th>
+                      <th>Patient</th>
+                      <th>Doctor</th>
+                      {selectedMetric === 'collections' ? (
+                        <th style={{ textAlign: 'right' }}>Fee</th>
+                      ) : (
+                        <th>Status</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {getMetricData().map(q => {
+                      const s = STATUS_STYLE[q.status] || STATUS_STYLE.waiting
+                      return (
+                        <tr key={q.id}>
+                          <td>
+                            <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(99,102,241,0.1)', color: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12 }}>
+                              {q.token_number}
+                            </div>
+                          </td>
+                          <td>
+                            <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13.5 }}>{q.patients?.name || '—'}</div>
+                            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 1 }}>{q.patients?.phone || '—'}</div>
+                          </td>
+                          <td>
+                            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{q.doctors?.name || '—'}</div>
+                          </td>
+                          {selectedMetric === 'collections' ? (
+                            <td style={{ textAlign: 'right', fontWeight: 600, color: q.fee === 0 ? 'var(--success)' : 'var(--text-primary)', fontSize: 13.5 }}>
+                              {q.fee === 0 ? 'Free' : `₹${q.fee}`}
+                            </td>
+                          ) : (
+                            <td>
+                              <span className="badge" style={{ background: s.bg, color: s.color, fontSize: 11, padding: '2px 8px' }}>
+                                {s.label}
+                              </span>
+                            </td>
+                          )}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {selectedMetric === 'collections' && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)', fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>
+                <span>Total Collections:</span>
+                <span style={{ color: 'var(--success)' }}>
+                  ₹{getMetricData().reduce((sum, item) => sum + (item.fee || 0), 0).toLocaleString('en-IN')}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }
