@@ -87,14 +87,21 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
     const dateStr = format(new Date(entry.created_at), 'dd MMM yyyy')
     const feeStr = entry.fee === 0 ? 'Free' : `₹${entry.fee || 0}`
     const msg = encodeURIComponent(
-      `*NEUROMAT CLINIC — TOKEN CONFIRMATION*\n\n` +
-      `Hello *${entry.patients.name}*,\n` +
-      `You have been registered successfully!\n\n` +
+      `*🧠 NEUROMAT CLINIC — TOKEN CONFIRMATION*\n\n` +
+      `Hello *${entry.patients.name}*,\n\n` +
+      `✅ Your registration has been completed successfully.\n\n` +
       `🎫 *Token Number:* ${entry.token_number} ${entry.prescription_id ? '(Follow-up)' : ''}\n` +
       `👨‍⚕️ *Doctor:* ${entry.doctors?.name || 'Assigned Doctor'}\n` +
-      `💵 *Fee:* ${feeStr}\n` +
+      `💰 *Consultation Fee:* ${feeStr}\n` +
       `📅 *Date:* ${dateStr}\n\n` +
-      `Please wait for your turn. Thank you!`
+      `Please wait for your turn. Thank you for choosing *Neuromat Clinic*. 🙏\n\n` +
+      `⭐ *We'd love to hear your feedback!*\n` +
+      `Please share your experience by leaving us a Google Review:\n` +
+      `📍 GMB Review: https://g.page/r/CaaDBhjIN5VQEBM/review\n\n` +
+      `📲 Stay connected with us for health tips, updates, and clinic announcements:\n\n` +
+      `📸 Instagram: https://www.instagram.com/neuromat_2026?igsh=ZjJ4bmE3b2VzajFq\n\n` +
+      `📘 Facebook: https://www.facebook.com/share/1P583NUYby/\n\n` +
+      `🙏 Thank you for trusting *Neuromat Clinic*. We wish you good health!`
     )
     window.open(`https://wa.me/${phone}?text=${msg}`, '_blank')
   }
