@@ -12,6 +12,12 @@ const FREQ_OPTIONS = [
 
 export default function Prescriptions() {
   const { user } = useAuth()
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 30)
+    return format(d, 'yyyy-MM-dd')
+  })
+  const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [prescriptions, setPrescriptions] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -28,9 +34,12 @@ export default function Prescriptions() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    fetchPrescriptions()
     fetchMedicines()
   }, [])
+
+  useEffect(() => {
+    fetchPrescriptions()
+  }, [startDate, endDate])
 
   const fetchMedicines = async () => {
     const { data } = await supabase.from('medicines').select('*')
@@ -211,20 +220,29 @@ export default function Prescriptions() {
 
   const fetchPrescriptions = async () => {
     setLoading(true)
-    let query = supabase
-      .from('prescriptions')
-      .select('*, patients(*), doctors(*), prescription_items(*)')
-      .order('created_at', { ascending: false })
-      .limit(50)
+    try {
+      const startDateISO = new Date(`${startDate}T00:00:00`).toISOString()
+      const endDateISO = new Date(`${endDate}T23:59:59`).toISOString()
+      
+      let query = supabase
+        .from('prescriptions')
+        .select('*, patients(*), doctors(*), prescription_items(*)')
+        .gte('created_at', startDateISO)
+        .lte('created_at', endDateISO)
+        .order('created_at', { ascending: false })
 
-    if (user?.role === 'doctor') {
-      const doctorId = user.doctor_id || user.doctor?.id
-      if (doctorId) query = query.eq('doctor_id', doctorId)
+      if (user?.role === 'doctor') {
+        const doctorId = user.doctor_id || user.doctor?.id
+        if (doctorId) query = query.eq('doctor_id', doctorId)
+      }
+
+      const { data } = await query
+      setPrescriptions(data || [])
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
     }
-
-    const { data } = await query
-    setPrescriptions(data || [])
-    setLoading(false)
   }
 
   const filtered = prescriptions.filter(p =>
@@ -241,16 +259,50 @@ export default function Prescriptions() {
         </p>
       </div>
 
-      <div className="input-group">
-        <MagnifyingGlass size={16} className="input-icon" />
-        <input
-          type="text"
-          className="input"
-          style={{ paddingLeft: '40px' }}
-          placeholder="Search by patient name or diagnosis..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="input-group" style={{ flex: 1, minWidth: 260 }}>
+          <MagnifyingGlass size={16} className="input-icon" />
+          <input
+            type="text"
+            className="input"
+            style={{ paddingLeft: '40px' }}
+            placeholder="Search by patient name or diagnosis..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+
+        {/* Date range inputs */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-card)', padding: '10px 14px', borderRadius: 12, border: '1px solid var(--border)' }}>
+          <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>From</span>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-primary)',
+              fontSize: 13,
+              outline: 'none',
+              fontFamily: 'inherit',
+            }}
+          />
+          <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>To</span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-primary)',
+              fontSize: 13,
+              outline: 'none',
+              fontFamily: 'inherit',
+            }}
+          />
+        </div>
       </div>
 
       {loading ? (

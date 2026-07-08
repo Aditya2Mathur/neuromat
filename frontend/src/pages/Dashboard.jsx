@@ -19,7 +19,9 @@ const STATUS_STYLE = {
 
 export default function Dashboard({ onNavigate, onSelectQueueItem }) {
   const { user } = useAuth()
-  const [period, setPeriod] = useState('daily') // 'daily', 'weekly', 'monthly'
+  const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [period, setPeriod] = useState('daily') // 'daily', 'weekly', 'monthly', 'custom'
   const [stats, setStats] = useState({
     todayPatients: 0, pendingQueue: 0, doctors: 0,
     medicines: 0, lowStock: 0, completedToday: 0,
@@ -30,29 +32,41 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
   const [selectedMetric, setSelectedMetric] = useState(null) // 'collections', 'patients', 'queue', 'completed'
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => { fetchStats() }, [period])
+  useEffect(() => {
+    fetchStats()
+  }, [startDate, endDate])
+
+  const handlePeriodChange = (p) => {
+    setPeriod(p)
+    const today = new Date()
+    const todayStr = format(today, 'yyyy-MM-dd')
+    if (p === 'daily') {
+      setStartDate(todayStr)
+      setEndDate(todayStr)
+    } else if (p === 'weekly') {
+      const prev = new Date()
+      prev.setDate(today.getDate() - 7)
+      setStartDate(format(prev, 'yyyy-MM-dd'))
+      setEndDate(todayStr)
+    } else if (p === 'monthly') {
+      const prev = new Date()
+      prev.setDate(today.getDate() - 30)
+      setStartDate(format(prev, 'yyyy-MM-dd'))
+      setEndDate(todayStr)
+    }
+  }
 
   const fetchStats = async () => {
     setLoading(true)
     try {
-      const today = new Date()
-      const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-      
-      let startDate = startOfToday
-      if (period === 'weekly') {
-        startDate = new Date(startOfToday)
-        startDate.setDate(startOfToday.getDate() - 7)
-      } else if (period === 'monthly') {
-        startDate = new Date(startOfToday)
-        startDate.setDate(startOfToday.getDate() - 30)
-      }
-      
-      const startDateISO = startDate.toISOString()
+      const startDateISO = new Date(`${startDate}T00:00:00`).toISOString()
+      const endDateISO = new Date(`${endDate}T23:59:59`).toISOString()
 
       const [queueRes, doctorsRes, medRes, lowStockRes] = await Promise.all([
         supabase.from('queue')
           .select('*, patients(*), doctors(*), prescriptions(*)')
           .gte('created_at', startDateISO)
+          .lte('created_at', endDateISO)
           .order('created_at', { ascending: false }),
         supabase.from('doctors').select('id').eq('is_active', true),
         supabase.from('medicines').select('id').eq('is_active', true),
@@ -193,7 +207,7 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
             <span className="gradient-text">{user?.name?.split(' ')[0]}</span>
           </h2>
           <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 6 }}>
-            {format(new Date(), 'EEEE, MMMM d, yyyy')} · Here's what's happening {period === 'daily' ? 'today' : period === 'weekly' ? 'this week' : 'this month'}
+            {format(new Date(), 'EEEE, MMMM d, yyyy')} · Here's what's happening {period === 'daily' ? 'today' : period === 'weekly' ? 'this week' : period === 'monthly' ? 'this month' : 'in the selected range'}
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -202,7 +216,7 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
             {['daily', 'weekly', 'monthly'].map((p) => (
               <button
                 key={p}
-                onClick={() => setPeriod(p)}
+                onClick={() => handlePeriodChange(p)}
                 style={{
                   padding: '6px 14px',
                   borderRadius: 8,
@@ -219,6 +233,44 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
                 {p}
               </button>
             ))}
+          </div>
+
+          {/* Date range inputs */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-card)', padding: '6px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>From</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value)
+                setPeriod('custom')
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-primary)',
+                fontSize: 13,
+                outline: 'none',
+                fontFamily: 'inherit',
+              }}
+            />
+            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>To</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value)
+                setPeriod('custom')
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-primary)',
+                fontSize: 13,
+                outline: 'none',
+                fontFamily: 'inherit',
+              }}
+            />
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10 }}>
@@ -280,10 +332,10 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
         <div className="card-header">
           <div>
             <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>
-              {period === 'daily' ? "Today's Queue" : period === 'weekly' ? "Weekly Queue" : "Monthly Queue"}
+              {period === 'daily' ? "Today's Queue" : period === 'weekly' ? "Weekly Queue" : period === 'monthly' ? "Monthly Queue" : "Selected Range Queue"}
             </h3>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-              {period === 'daily' ? "Live patient status updates" : `Recent updates for the last ${period === 'weekly' ? '7' : '30'} days`}
+              {period === 'daily' ? "Live patient status updates" : period === 'weekly' ? "Recent updates for the last 7 days" : period === 'monthly' ? "Recent updates for the last 30 days" : "Patient queue within selected dates"}
             </p>
           </div>
           <button onClick={fetchStats} className="btn btn-sm btn-secondary">Refresh</button>
@@ -293,7 +345,7 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
           <div className="empty-state">
             <Queue size={40} className="empty-state-icon" />
             <p className="empty-state-title">
-              {period === 'daily' ? "No patients in queue today" : `No patients in queue for this ${period === 'weekly' ? 'week' : 'month'}`}
+              {period === 'daily' ? "No patients in queue today" : period === 'weekly' ? "No patients in queue for this week" : period === 'monthly' ? "No patients in queue for this month" : "No patients in queue for this range"}
             </p>
             <p className="empty-state-text">Patients registered by reception will appear here</p>
           </div>
@@ -416,7 +468,7 @@ export default function Dashboard({ onNavigate, onSelectQueueItem }) {
                   {selectedMetric === 'completed' && 'Completed Patients'}
                 </h3>
                 <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
-                  {period === 'daily' ? "Today's details" : period === 'weekly' ? "This week's details" : "This month's details"}
+                  {period === 'daily' ? "Today's details" : period === 'weekly' ? "This week's details" : period === 'monthly' ? "This month's details" : "Selected range details"}
                 </p>
               </div>
               <button onClick={() => setSelectedMetric(null)} className="btn btn-icon btn-secondary btn-sm"><X size={14} /></button>

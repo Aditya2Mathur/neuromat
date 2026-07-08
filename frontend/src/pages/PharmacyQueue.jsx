@@ -24,48 +24,60 @@ export default function PharmacyQueue() {
   const [prescription,  setPrescription] = useState(null)
   const [dispensing,    setDispensing]   = useState(false)
   const [filter,        setFilter]       = useState('pending')
-  const [timePeriod,    setTimePeriod]   = useState('daily') // 'daily', 'weekly', 'monthly'
+  const [startDate,     setStartDate]    = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [endDate,       setEndDate]      = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [timePeriod,    setTimePeriod]   = useState('daily') // 'daily', 'weekly', 'monthly', 'custom'
   const printRef = useRef()
 
   /* ── Realtime + initial load ──────────────────── */
   useEffect(() => {
     fetchQueue()
-  }, [filter, timePeriod])
+  }, [filter, startDate, endDate])
 
   useEffect(() => {
     const sub = supabase.channel('pharmacy-queue')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'queue' }, fetchQueue)
       .subscribe()
     return () => supabase.removeChannel(sub)
-  }, [filter, timePeriod])
+  }, [filter, startDate, endDate])
+
+  const handlePeriodChange = (p) => {
+    setTimePeriod(p)
+    const today = new Date()
+    const todayStr = format(today, 'yyyy-MM-dd')
+    if (p === 'daily') {
+      setStartDate(todayStr)
+      setEndDate(todayStr)
+    } else if (p === 'weekly') {
+      const prev = new Date()
+      prev.setDate(today.getDate() - 7)
+      setStartDate(format(prev, 'yyyy-MM-dd'))
+      setEndDate(todayStr)
+    } else if (p === 'monthly') {
+      const prev = new Date()
+      prev.setDate(today.getDate() - 30)
+      setStartDate(format(prev, 'yyyy-MM-dd'))
+      setEndDate(todayStr)
+    }
+  }
 
   const fetchQueue = async () => {
     setLoading(true)
     try {
-      const today = new Date()
-      const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-      
-      let startDate = startOfToday
-      if (timePeriod === 'weekly') {
-        startDate = new Date(startOfToday)
-        startDate.setDate(startOfToday.getDate() - 7)
-      } else if (timePeriod === 'monthly') {
-        startDate = new Date(startOfToday)
-        startDate.setDate(startOfToday.getDate() - 30)
-      }
-
-      const startDateStr = format(startDate, 'yyyy-MM-dd')
       const statuses = filter === 'dispensed' ? ['done'] : ['completed', 'dispensing']
 
       let q = supabase
         .from('queue')
         .select('*, patients(*), doctors(*), prescriptions(*, prescription_items(*))')
         .in('status', statuses)
+        .gte('visit_date', startDate)
+        .lte('visit_date', endDate)
 
-      if (timePeriod === 'daily') {
-        q = q.eq('visit_date', startDateStr).order('token_number', { ascending: true })
+      if (timePeriod === 'daily' || startDate === endDate) {
+        q = q.order('token_number', { ascending: true })
       } else {
-        q = q.gte('visit_date', startDateStr)
+        q = q.gte('visit_date', startDate)
+             .lte('visit_date', endDate)
              .order('visit_date', { ascending: false })
              .order('token_number', { ascending: true })
       }
@@ -203,7 +215,7 @@ export default function PharmacyQueue() {
               <button
                 key={p}
                 type="button"
-                onClick={() => setTimePeriod(p)}
+                onClick={() => handlePeriodChange(p)}
                 style={{
                   padding: '6px 14px',
                   borderRadius: 8,
@@ -220,6 +232,44 @@ export default function PharmacyQueue() {
                 {p}
               </button>
             ))}
+          </div>
+
+          {/* Date range inputs */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-card)', padding: '6px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>From</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value)
+                setTimePeriod('custom')
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-primary)',
+                fontSize: 13,
+                outline: 'none',
+                fontFamily: 'inherit',
+              }}
+            />
+            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>To</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value)
+                setTimePeriod('custom')
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-primary)',
+                fontSize: 13,
+                outline: 'none',
+                fontFamily: 'inherit',
+              }}
+            />
           </div>
         </div>
 

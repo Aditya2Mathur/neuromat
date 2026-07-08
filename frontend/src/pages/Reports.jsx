@@ -12,36 +12,56 @@ import { format, subDays } from 'date-fns'
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend)
 
 export default function Reports() {
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 6) // default to last 7 days
+    return format(d, 'yyyy-MM-dd')
+  })
+  const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [stats, setStats] = useState({ patients: 0, prescriptions: 0, medicines: 0, queue: [] })
   const [weeklyData, setWeeklyData] = useState([])
   const [statusData, setStatusData] = useState({ waiting: 0, done: 0 })
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => { fetchStats() }, [])
+  useEffect(() => {
+    fetchStats()
+  }, [startDate, endDate])
 
   const fetchStats = async () => {
     setLoading(true)
     try {
+      const startDateISO = new Date(`${startDate}T00:00:00`).toISOString()
+      const endDateISO = new Date(`${endDate}T23:59:59`).toISOString()
+
       const [pats, rxs, meds, queueWeek] = await Promise.all([
-        supabase.from('patients').select('id', { count: 'exact' }),
-        supabase.from('prescriptions').select('id', { count: 'exact' }),
+        supabase.from('patients').select('id', { count: 'exact' }).gte('created_at', startDateISO).lte('created_at', endDateISO),
+        supabase.from('prescriptions').select('id', { count: 'exact' }).gte('created_at', startDateISO).lte('created_at', endDateISO),
         supabase.from('medicines').select('id', { count: 'exact' }).eq('is_active', true),
         supabase.from('queue').select('visit_date, status')
-          .gte('visit_date', format(subDays(new Date(), 6), 'yyyy-MM-dd'))
+          .gte('visit_date', startDate)
+          .lte('visit_date', endDate)
           .order('visit_date'),
       ])
 
       const qData = queueWeek.data || []
       
-      // Group by date for weekly chart
-      const dates = [...Array(7)].map((_, i) => format(subDays(new Date(), 6 - i), 'yyyy-MM-dd'))
+      const start = new Date(startDate)
+      const end = new Date(endDate)
+      const diffTime = Math.abs(end - start)
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
+      
+      const dates = []
+      for (let i = 0; i < diffDays; i++) {
+        const nextDate = new Date(start)
+        nextDate.setDate(start.getDate() + i)
+        dates.push(format(nextDate, 'yyyy-MM-dd'))
+      }
+
       const weekly = dates.map(d => ({
-        date: format(new Date(d), 'EEE'),
+        date: format(new Date(`${d}T00:00:00`), 'dd MMM'),
         count: qData.filter(q => q.visit_date === d).length
       }))
 
-      const todayQ = qData.filter(q => q.visit_date === format(new Date(), 'yyyy-MM-dd'))
-      
       setStats({
         patients: pats.count || 0,
         prescriptions: rxs.count || 0,
@@ -49,8 +69,8 @@ export default function Reports() {
       })
       setWeeklyData(weekly)
       setStatusData({
-        done: todayQ.filter(q => q.status === 'done').length,
-        pending: todayQ.filter(q => q.status !== 'done').length,
+        done: qData.filter(q => q.status === 'done').length,
+        pending: qData.filter(q => q.status !== 'done').length,
       })
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
@@ -120,16 +140,49 @@ export default function Reports() {
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 22 }}>
-      <div>
-        <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>Reports & Analytics</h2>
-        <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 4 }}>System overview and statistics</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>Reports & Analytics</h2>
+          <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 4 }}>System overview and statistics</p>
+        </div>
+        {/* Date range inputs */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-card)', padding: '10px 14px', borderRadius: 12, border: '1px solid var(--border)' }}>
+          <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>From</span>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-primary)',
+              fontSize: 13,
+              outline: 'none',
+              fontFamily: 'inherit',
+            }}
+          />
+          <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>To</span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-primary)',
+              fontSize: 13,
+              outline: 'none',
+              fontFamily: 'inherit',
+            }}
+          />
+        </div>
       </div>
 
       {/* Summary cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
         {[
-          { label: 'Total Patients',       value: stats.patients,       icon: Users,    color: '#6366f1' },
-          { label: 'Total Prescriptions',  value: stats.prescriptions,  icon: FirstAid, color: '#10b981' },
+          { label: 'Patients Registered', value: stats.patients,      icon: Users,    color: '#6366f1' },
+          { label: 'Prescriptions Issued', value: stats.prescriptions, icon: FirstAid, color: '#10b981' },
           { label: 'Active Medicines',     value: stats.medicines,      icon: Pill,     color: '#06b6d4' },
         ].map((s, i) => {
           const Icon = s.icon
@@ -149,13 +202,13 @@ export default function Reports() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
         <div className="card" style={{ padding: '22px 24px' }}>
           <h3 style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
-            <TrendUp size={15} color="#6366f1" /> Weekly Patients (Last 7 Days)
+            <TrendUp size={15} color="#6366f1" /> Patient Visits
           </h3>
           <Bar data={barChartData} options={chartOptions} />
         </div>
         <div className="card" style={{ padding: '22px 24px' }}>
           <h3 style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
-            <ChartBar size={15} color="#10b981" /> Today's Queue Status
+            <ChartBar size={15} color="#10b981" /> Queue Status Breakdown
           </h3>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ maxWidth: 260, width: '100%' }}>

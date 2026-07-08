@@ -16,6 +16,8 @@ const STATUS_MAP = {
 
 export default function QueuePage() {
   const { user } = useAuth()
+  const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [queue,   setQueue]   = useState([])
   const [loading, setLoading] = useState(true)
   const [filter,  setFilter]  = useState('active')
@@ -33,20 +35,25 @@ export default function QueuePage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'queue' }, fetchQueue)
       .subscribe()
     return () => supabase.removeChannel(sub)
-  }, [])
+  }, [startDate, endDate])
 
   const fetchQueue = async () => {
     setLoading(true)
-    const today = new Date()
-    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
-    const startOfTodayISO = startOfToday.toISOString()
-    const { data } = await supabase
-      .from('queue')
-      .select('*, patients(*), doctors(*), prescriptions(*)')
-      .gte('created_at', startOfTodayISO)
-      .order('token_number', { ascending: true })
-    setQueue(data || [])
-    setLoading(false)
+    try {
+      const startDateISO = new Date(`${startDate}T00:00:00`).toISOString()
+      const endDateISO = new Date(`${endDate}T23:59:59`).toISOString()
+      const { data } = await supabase
+        .from('queue')
+        .select('*, patients(*), doctors(*), prescriptions(*)')
+        .gte('created_at', startDateISO)
+        .lte('created_at', endDateISO)
+        .order('token_number', { ascending: true })
+      setQueue(data || [])
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const openEditModal = (entry) => {
@@ -155,14 +162,49 @@ export default function QueuePage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>Today's Queue</h2>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>
+            {startDate === endDate && startDate === format(new Date(), 'yyyy-MM-dd') ? "Today's Queue" : "Queue Records"}
+          </h2>
           <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 4 }}>
-            {format(new Date(), 'EEEE, MMMM d, yyyy')} · {queue.length} total patients
+            {startDate === endDate ? format(new Date(`${startDate}T00:00:00`), 'EEEE, MMMM d, yyyy') : `${format(new Date(`${startDate}T00:00:00`), 'dd MMM yyyy')} - ${format(new Date(`${endDate}T00:00:00`), 'dd MMM yyyy')}`} · {queue.length} total patients
           </p>
         </div>
-        <button id="refresh-queue-btn" onClick={fetchQueue} className="btn btn-sm btn-secondary">
-          <ArrowClockwise size={14} /> Refresh
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {/* Date range inputs */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-card)', padding: '6px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>From</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-primary)',
+                fontSize: 13,
+                outline: 'none',
+                fontFamily: 'inherit',
+              }}
+            />
+            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>To</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-primary)',
+                fontSize: 13,
+                outline: 'none',
+                fontFamily: 'inherit',
+              }}
+            />
+          </div>
+          <button id="refresh-queue-btn" onClick={fetchQueue} className="btn btn-sm btn-secondary">
+            <ArrowClockwise size={14} /> Refresh
+          </button>
+        </div>
       </div>
 
       {/* Summary stat chips */}

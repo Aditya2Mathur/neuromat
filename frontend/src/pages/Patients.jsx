@@ -13,7 +13,9 @@ export default function Patients() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState(null)
   const [patientHistory, setPatientHistory] = useState([])
-  const [period, setPeriod] = useState('all') // 'all', 'daily', 'weekly', 'monthly'
+  const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [period, setPeriod] = useState('all') // 'all', 'daily', 'weekly', 'monthly', 'custom'
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 20
 
@@ -39,6 +41,26 @@ export default function Patients() {
     setCurrentPage(1)
   }, [search, period])
 
+  const handlePeriodChange = (p) => {
+    setPeriod(p)
+    const today = new Date()
+    const todayStr = format(today, 'yyyy-MM-dd')
+    if (p === 'daily') {
+      setStartDate(todayStr)
+      setEndDate(todayStr)
+    } else if (p === 'weekly') {
+      const prev = new Date()
+      prev.setDate(today.getDate() - 7)
+      setStartDate(format(prev, 'yyyy-MM-dd'))
+      setEndDate(todayStr)
+    } else if (p === 'monthly') {
+      const prev = new Date()
+      prev.setDate(today.getDate() - 30)
+      setStartDate(format(prev, 'yyyy-MM-dd'))
+      setEndDate(todayStr)
+    }
+  }
+
   const filtered = patients.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.phone.includes(search)
     if (!matchesSearch) return false
@@ -46,6 +68,13 @@ export default function Patients() {
     if (period === 'all') return true
 
     const patientDate = new Date(p.updated_at)
+    
+    if (period === 'custom') {
+      const start = new Date(`${startDate}T00:00:00`)
+      const end = new Date(`${endDate}T23:59:59`)
+      return patientDate >= start && patientDate <= end
+    }
+
     const today = new Date()
     const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
 
@@ -210,7 +239,7 @@ export default function Patients() {
             <button
               key={p}
               type="button"
-              onClick={() => setPeriod(p)}
+              onClick={() => handlePeriodChange(p)}
               style={{
                 padding: '6px 14px',
                 borderRadius: 8,
@@ -228,6 +257,46 @@ export default function Patients() {
             </button>
           ))}
         </div>
+
+        {/* Date range inputs (only visible when not 'all') */}
+        {period !== 'all' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-card)', padding: '6px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>From</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value)
+                setPeriod('custom')
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-primary)',
+                fontSize: 13,
+                outline: 'none',
+                fontFamily: 'inherit',
+              }}
+            />
+            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>To</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value)
+                setPeriod('custom')
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-primary)',
+                fontSize: 13,
+                outline: 'none',
+                fontFamily: 'inherit',
+              }}
+            />
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ overflowX: 'auto', padding: '16px 20px' }}>
