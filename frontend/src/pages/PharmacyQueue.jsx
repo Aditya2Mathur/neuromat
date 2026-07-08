@@ -235,41 +235,61 @@ export default function PharmacyQueue() {
           </div>
 
           {/* Date range inputs */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-card)', padding: '6px 12px', borderRadius: 10, border: '1px solid var(--border)' }}>
-            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>From</span>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => {
-                setStartDate(e.target.value)
-                setTimePeriod('custom')
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div 
+              onClick={(e) => {
+                const input = e.currentTarget.querySelector('input[type="date"]')
+                if (input && typeof input.showPicker === 'function') input.showPicker()
               }}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-primary)',
-                fontSize: 13,
-                outline: 'none',
-                fontFamily: 'inherit',
+              style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-card)', padding: '6px 14px', borderRadius: 10, border: '1px solid var(--border)', cursor: 'pointer' }}
+            >
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>From</span>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value)
+                  setTimePeriod('custom')
+                }}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-primary)',
+                  fontSize: 13,
+                  outline: 'none',
+                  fontFamily: 'inherit',
+                  cursor: 'pointer',
+                }}
+              />
+            </div>
+            <div 
+              onClick={(e) => {
+                const input = e.currentTarget.querySelector('input[type="date"]')
+                if (input && typeof input.showPicker === 'function') input.showPicker()
               }}
-            />
-            <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>To</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => {
-                setEndDate(e.target.value)
-                setTimePeriod('custom')
-              }}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-primary)',
-                fontSize: 13,
-                outline: 'none',
-                fontFamily: 'inherit',
-              }}
-            />
+              style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-card)', padding: '6px 14px', borderRadius: 10, border: '1px solid var(--border)', cursor: 'pointer' }}
+            >
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>To</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value)
+                  setTimePeriod('custom')
+                }}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-primary)',
+                  fontSize: 13,
+                  outline: 'none',
+                  fontFamily: 'inherit',
+                  cursor: 'pointer',
+                }}
+              />
+            </div>
           </div>
         </div>
 
